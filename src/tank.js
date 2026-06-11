@@ -292,19 +292,26 @@ export function buildTankMesh(b, team, skin = null) {
   const root = new THREE.Group();
   root.userData.wheels = [];
   let body;
+  // SPACE VOLLEY armour reads as fielded sci-fi hardware: more metallic
+  // panels, darker cooler structure, and bright energy trim/thrusters.
   if (skin && skin.kind === "solid") {
-    body = new THREE.MeshStandardMaterial({ color: skin.color, roughness: 0.62, metalness: 0.38 });
+    body = new THREE.MeshStandardMaterial({ color: skin.color, roughness: 0.46, metalness: 0.62 });
   } else if (skin && skin.kind === "camo") {
     body = new THREE.MeshStandardMaterial({
-      color: 0xffffff, map: camoTexture(skin), roughness: 0.7, metalness: 0.28,
+      color: 0xffffff, map: camoTexture(skin), roughness: 0.58, metalness: 0.42,
     });
   } else {
-    body = new THREE.MeshStandardMaterial({ color: team.body, roughness: 0.62, metalness: 0.38 });
+    body = new THREE.MeshStandardMaterial({ color: team.body, roughness: 0.46, metalness: 0.62 });
   }
-  const dark = new THREE.MeshStandardMaterial({ color: 0x20242a, roughness: 0.85, metalness: 0.2 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x161a22, roughness: 0.7, metalness: 0.55 });
   const accent = new THREE.MeshStandardMaterial({
-    color: team.accent, roughness: 0.4, metalness: 0.3,
-    emissive: team.accent, emissiveIntensity: 0.25,
+    color: team.accent, roughness: 0.35, metalness: 0.2,
+    emissive: team.accent, emissiveIntensity: 0.95,
+  });
+  // bright energy material for thrusters + ground-effect glow (anti-grav read)
+  const glow = new THREE.MeshStandardMaterial({
+    color: team.accent, roughness: 0.3, metalness: 0.0,
+    emissive: team.accent, emissiveIntensity: 2.4,
   });
 
   // hull — beveled box silhouette via extruded shape
@@ -333,47 +340,51 @@ export function buildTankMesh(b, team, skin = null) {
   stripe.position.y = 1.5 + hullH + 0.07;
   root.add(stripe);
 
-  if (b.hover) {
-    // hover chassis: no tracks — a dark plenum skirt with a glowing
-    // lift strip floating beneath the hull
-    const skirt = new THREE.Mesh(new THREE.BoxGeometry(b.hullW + 1.8, 1.2, b.hullL * 0.96), dark);
-    skirt.position.y = 1.0;
-    skirt.castShadow = true;
-    root.add(skirt);
-    const lift = new THREE.Mesh(new THREE.BoxGeometry(b.hullW + 1.2, 0.25, b.hullL * 0.88), accent);
-    lift.position.y = 0.42;
-    root.add(lift);
-    for (const side of [-1, 1]) {
-      const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 1.4, 8), dark);
-      pod.position.set(side * (hw + 0.7), 1.0, -b.hullL * 0.32);
-      root.add(pod);
-    }
-  } else {
-    // tracks
-    for (const side of [-1, 1]) {
-      const track = new THREE.Mesh(
-        new THREE.BoxGeometry(1.7, 2.1, b.hullL * 1.02),
-        dark
-      );
-      track.position.set(side * (hw + 0.55), 1.15, 0);
-      track.castShadow = true;
-      root.add(track);
-      // wheels
-      for (let i = 0; i < b.wheels; i++) {
-        const wheelGeo = new THREE.CylinderGeometry(0.95, 0.95, 0.6, 12);
-        wheelGeo.rotateZ(Math.PI / 2); // axle on X — rotation.x is the spin
-        const wheel = new THREE.Mesh(wheelGeo, dark);
-        const t = b.wheels === 1 ? 0.5 : i / (b.wheels - 1);
-        wheel.position.set(side * (hw + 0.56), 0.95, lerp(-b.hullL * 0.42, b.hullL * 0.42, t));
-        root.add(wheel);
-        root.userData.wheels.push(wheel);
-      }
-      // fender skirts on plated builds
-      if (b.plated) {
-        const skirt = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, b.hullL * 0.96), body);
-        skirt.position.set(side * (hw + 1.0), 2.2, 0);
-        root.add(skirt);
-      }
+  // ── sci-fi drive block: rear engine housing + glowing thruster cores ──
+  const engine = new THREE.Mesh(new THREE.BoxGeometry(b.hullW * 0.74, hullH * 0.62, 1.2), dark);
+  engine.position.set(0, 1.5 + hullH * 0.52, -hl * 0.84);
+  engine.castShadow = true;
+  root.add(engine);
+  const nozN = b.hullW > 8 ? 3 : 2;
+  for (let i = 0; i < nozN; i++) {
+    const t = nozN === 1 ? 0.5 : i / (nozN - 1);
+    const nzx = lerp(-b.hullW * 0.28, b.hullW * 0.28, t);
+    const housing = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.64, 0.85, 12), dark);
+    housing.rotation.x = Math.PI / 2;
+    housing.position.set(nzx, 1.5 + hullH * 0.5, -hl - 0.28);
+    root.add(housing);
+    const coreGeo = new THREE.CylinderGeometry(0.32, 0.44, 0.55, 12);
+    const core = new THREE.Mesh(coreGeo, glow);
+    core.rotation.x = Math.PI / 2;
+    core.position.set(nzx, 1.5 + hullH * 0.5, -hl - 0.52);
+    root.add(core);
+  }
+  // ── anti-grav undercarriage (all Space Volley chassis are hover-tech) ──
+  // A dark plenum skirt with a bright glowing lift strip slung beneath the
+  // hull, plus side lift pods with downward thrust glow. No wheels/tracks —
+  // these are the terrestrial tell. Physics never reads the hover flag, so
+  // this is purely cosmetic; movement is identical to before.
+  const skirt = new THREE.Mesh(new THREE.BoxGeometry(b.hullW + 1.4, 1.1, b.hullL * 0.96), dark);
+  skirt.position.y = 1.0;
+  skirt.castShadow = true;
+  root.add(skirt);
+  const lift = new THREE.Mesh(new THREE.BoxGeometry(b.hullW + 0.8, 0.3, b.hullL * 0.9), glow);
+  lift.position.y = 0.5;
+  root.add(lift);
+  for (const side of [-1, 1]) {
+    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.05, 1.5, 10), dark);
+    pod.position.set(side * (hw + 0.5), 1.0, -b.hullL * 0.3);
+    pod.castShadow = true;
+    root.add(pod);
+    const podGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.18, 10), glow);
+    podGlow.position.set(side * (hw + 0.5), 0.28, -b.hullL * 0.3);
+    root.add(podGlow);
+    // armoured side plate on heavy/plated builds — keeps chassis variety
+    if (b.plated) {
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, b.hullL * 0.9), body);
+      plate.position.set(side * (hw + 0.95), 2.1, 0);
+      plate.castShadow = true;
+      root.add(plate);
     }
   }
 
