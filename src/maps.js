@@ -2,12 +2,22 @@
 // Unauthorized copying, distribution, or use of this software is strictly prohibited.
 
 /**
- * The five worlds of IRON VOLLEY. A map definition is pure data +
- * an analytic height function (terrain mesh displacement AND physics
- * collision query use the same function, so they can never disagree).
+ * The worlds of SPACE VOLLEY. Every battlefield is an off-world surface —
+ * a moon, a planet, a station deck, an alien construct — fought under a
+ * deep star field with a parent body looming on the horizon.
  *
- * Every map is a 1400×1400 battlefield with hills high enough to
- * volley over but passes low enough to brawl through.
+ * A map definition is pure data + an analytic height function (the terrain
+ * mesh displacement AND physics collision query use the same function, so
+ * they can never disagree). Terrain SHAPES are inherited from the engine;
+ * only the sky, light, palette and dressing change per world.
+ *
+ * Every map is a 1400×1400 battlefield with hills high enough to volley
+ * over but passes low enough to brawl through.
+ *
+ * Per-map space dressing (all optional):
+ *   stars   : true by default (set false only for a hazy atmosphere world)
+ *   nebula  : hex tint for the faint background nebula
+ *   planet  : { dir:[x,y,z], color, size, ring } parent body on the horizon
  */
 
 import { makeFbm, clamp, lerp, smoothstep } from "./util.js";
@@ -25,92 +35,96 @@ function rimWall(x, z) {
 }
 
 function makeMap(def) {
-  return { props: [], water: null, ...def };
+  return { props: [], water: null, stars: true, ...def };
 }
 
 export const MAPS = [
-  // ── 1. DUNE SEA — rolling desert ridges, sandstone mesas ──────
+  // ── 1. SEA OF TRANQUILITY — lunar mare, grey regolith, Earthrise ──
   makeMap({
     id: "dunes",
-    name: "Dune Sea",
-    blurb: "Sun-bleached ridgelines and deep sand bowls.",
+    name: "Sea of Tranquility",
+    blurb: "Grey mare dust and old impact swells. Earth hangs over the rim.",
     seed: 101,
-    sky: { top: 0x3a73b8, horizon: 0xf2c98c, sun: 0xffe7b0, sunPos: [0.55, 0.32, 0.4] },
-    fog: { color: 0xe0b780, near: 380, far: 1500 },
-    hemi: { sky: 0xbfd9ff, ground: 0x8a6a40, intensity: 0.55 },
-    sunlight: { color: 0xffdf9e, intensity: 2.3 },
-    exposure: 1.12,
+    sky: { top: 0x02040a, horizon: 0x1a2433, sun: 0xfffaf0, sunPos: [0.55, 0.32, 0.4] },
+    fog: { color: 0x10141c, near: 520, far: 1900 },
+    hemi: { sky: 0x6878a0, ground: 0x3a3d42, intensity: 0.5 },
+    sunlight: { color: 0xfff6e6, intensity: 2.5 },
+    exposure: 1.08,
+    nebula: 0x223a66,
+    planet: { dir: [0.4, 0.12, -0.9], color: 0x5b86c4, size: 0.2, ring: false },
     palette: [
-      { h: -10, c: [0.58, 0.4, 0.18] },
-      { h: 14, c: [0.74, 0.52, 0.22] },
-      { h: 34, c: [0.85, 0.62, 0.28] },
-      { h: 60, c: [0.52, 0.33, 0.15] },
-      { h: 100, c: [0.38, 0.24, 0.12] },
+      { h: -10, c: [0.30, 0.30, 0.31] },
+      { h: 14, c: [0.42, 0.42, 0.43] },
+      { h: 34, c: [0.55, 0.55, 0.55] },
+      { h: 60, c: [0.36, 0.36, 0.37] },
+      { h: 100, c: [0.24, 0.24, 0.25] },
     ],
-    slopeColor: [0.6, 0.42, 0.3],
+    slopeColor: [0.26, 0.26, 0.27],
     height(x, z, fbm) {
       const nx = x / 560, nz = z / 560;
-      // long diagonal dune ridges + broad bowls
       const ridges = Math.pow(Math.abs(fbm(nx * 1.6 + 9, nz * 1.6 - 4)), 0.8) * 46;
       const swell = fbm(nx * 0.55, nz * 0.55) * 26;
       const detail = fbm(nx * 6, nz * 6) * 3;
       return ridges + swell + detail + rimWall(x, z);
     },
-    propsSpec: { kind: "rocks+cacti", count: 90 },
+    propsSpec: { kind: "monoliths", count: 70 },
   }),
 
-  // ── 2. FROSTLINE — glacial valley, ice sheets, black pines ────
+  // ── 2. EUROPA SHELF — cracked ice plain under Jupiter ────────────
   makeMap({
     id: "frost",
-    name: "Frostline",
-    blurb: "A frozen valley where shells whistle through falling snow.",
+    name: "Europa Shelf",
+    blurb: "Fractured ice over a black ocean. Jupiter fills half the sky.",
     seed: 202,
-    sky: { top: 0x21304a, horizon: 0xb9c9d9, sun: 0xdfeaff, sunPos: [-0.4, 0.22, 0.6] },
-    fog: { color: 0xc3d2e0, near: 260, far: 1250 },
-    hemi: { sky: 0xcfe2ff, ground: 0x44525f, intensity: 0.95 },
-    sunlight: { color: 0xeaf2ff, intensity: 1.5 },
+    sky: { top: 0x040810, horizon: 0x2a3a52, sun: 0xeef4ff, sunPos: [-0.4, 0.22, 0.6] },
+    fog: { color: 0x16202e, near: 360, far: 1500 },
+    hemi: { sky: 0x9fc2e8, ground: 0x35454f, intensity: 0.78 },
+    sunlight: { color: 0xeaf2ff, intensity: 1.7 },
+    nebula: 0x2a4a7a,
+    planet: { dir: [-0.5, 0.18, -0.82], color: 0xc8a070, size: 0.34, ring: false },
     palette: [
-      { h: -10, c: [0.62, 0.7, 0.78] }, // frozen lake tint
-      { h: 6, c: [0.82, 0.87, 0.92] },
-      { h: 30, c: [0.92, 0.95, 0.98] },
-      { h: 62, c: [0.75, 0.8, 0.88] },
-      { h: 110, c: [0.5, 0.56, 0.66] },
+      { h: -10, c: [0.52, 0.62, 0.72] },
+      { h: 6, c: [0.74, 0.82, 0.9] },
+      { h: 30, c: [0.86, 0.92, 0.98] },
+      { h: 62, c: [0.68, 0.76, 0.86] },
+      { h: 110, c: [0.46, 0.54, 0.66] },
     ],
-    slopeColor: [0.36, 0.4, 0.48],
+    slopeColor: [0.34, 0.42, 0.52],
     snow: true,
     height(x, z, fbm) {
       const nx = x / 600, nz = z / 600;
       const valley = Math.abs(fbm(nx * 0.8, nz * 0.8)) * 64;
       const shelf = smoothstep(clamp(fbm(nx * 1.7 + 31, nz * 1.7) * 0.5 + 0.5, 0, 1)) * 22;
       const detail = fbm(nx * 5, nz * 5) * 4;
-      // frozen lake: flatten a broad disc near center-west
       const lake = Math.hypot(x + 220, z - 120);
       const flat = smoothstep(clamp(1 - lake / 240, 0, 1));
       const h = valley + shelf + detail;
       return lerp(h, 1.5, flat * 0.92) + rimWall(x, z);
     },
-    water: { level: 1.2, color: 0x9fd2e8, opacity: 0.85, frozen: true },
-    propsSpec: { kind: "pines+boulders", count: 130 },
+    water: { level: 1.2, color: 0x8fc4e8, opacity: 0.85, frozen: true },
+    propsSpec: { kind: "pines+boulders", count: 110 },
   }),
 
-  // ── 3. VERDANT VALE — emerald hills, poppy fields, old stones ─
+  // ── 3. GENESIS-IV — terraformed alien world, teal flora ─────────
   makeMap({
     id: "verdant",
-    name: "Verdant Vale",
-    blurb: "Rolling green downs hiding ancient standing stones.",
+    name: "Genesis-IV",
+    blurb: "A half-terraformed colony world. The green is not from Earth.",
     seed: 303,
-    sky: { top: 0x3e8edd, horizon: 0xcfe8c9, sun: 0xfff4d6, sunPos: [0.25, 0.5, -0.3] },
-    fog: { color: 0xc9dec8, near: 420, far: 1600 },
-    hemi: { sky: 0xbfe1ff, ground: 0x3f5a33, intensity: 1.0 },
-    sunlight: { color: 0xfff2cf, intensity: 2.0 },
+    sky: { top: 0x05101a, horizon: 0x16484a, sun: 0xe6fff0, sunPos: [0.25, 0.5, -0.3] },
+    fog: { color: 0x123030, near: 460, far: 1700 },
+    hemi: { sky: 0x7fe0d0, ground: 0x2a4a30, intensity: 0.85 },
+    sunlight: { color: 0xeafff4, intensity: 2.0 },
+    nebula: 0x1f7a6a,
+    planet: { dir: [0.62, 0.1, -0.78], color: 0x4fae8a, size: 0.16, ring: true },
     palette: [
-      { h: -8, c: [0.12, 0.26, 0.1] },
-      { h: 8, c: [0.18, 0.42, 0.14] },
-      { h: 28, c: [0.27, 0.52, 0.17] },
-      { h: 52, c: [0.36, 0.48, 0.2] },
-      { h: 95, c: [0.48, 0.47, 0.42] },
+      { h: -8, c: [0.08, 0.24, 0.2] },
+      { h: 8, c: [0.12, 0.4, 0.3] },
+      { h: 28, c: [0.18, 0.52, 0.38] },
+      { h: 52, c: [0.26, 0.5, 0.4] },
+      { h: 95, c: [0.34, 0.46, 0.46] },
     ],
-    slopeColor: [0.36, 0.33, 0.24],
+    slopeColor: [0.22, 0.34, 0.32],
     grass: true,
     height(x, z, fbm) {
       const nx = x / 520, nz = z / 520;
@@ -118,59 +132,61 @@ export const MAPS = [
       const knolls = Math.max(0, fbm(nx * 2.4 + 17, nz * 2.4 - 9)) * 24;
       const detail = fbm(nx * 7, nz * 7) * 2.2;
       const river = Math.abs(fbm(nx * 0.7 + 50, nz * 0.7 + 50)) * 999;
-      const cut = Math.max(0, 16 - river * 0.5); // winding brook bed
+      const cut = Math.max(0, 16 - river * 0.5);
       return downs + knolls + detail - cut + 6 + rimWall(x, z);
     },
-    water: { level: -6, color: 0x2f7698, opacity: 0.82 },
+    water: { level: -6, color: 0x1fa8a0, opacity: 0.82, energy: true, emissive: 1.2 },
     propsSpec: { kind: "trees+stones", count: 150 },
   }),
 
-  // ── 4. CINDER PEAK — volcanic ash fields and lava channels ────
+  // ── 4. IO ASCENDANT — volcanic moon, sulfur and lava ────────────
   makeMap({
     id: "cinder",
-    name: "Cinder Peak",
-    blurb: "Black ash, red rivers. The mountain does not care who wins.",
+    name: "Io Ascendant",
+    blurb: "Sulfur plains and red rivers. Jupiter broods over the calderas.",
     seed: 404,
-    sky: { top: 0x1a0d12, horizon: 0x7a2a16, sun: 0xff7a3c, sunPos: [-0.2, 0.18, -0.55] },
-    fog: { color: 0x4a1d12, near: 240, far: 1150 },
-    hemi: { sky: 0x8a4a4a, ground: 0x2a1612, intensity: 1.3 },
-    sunlight: { color: 0xff9b66, intensity: 2.0 },
-    exposure: 1.5,
+    sky: { top: 0x0a0408, horizon: 0x5a2412, sun: 0xff8a3c, sunPos: [-0.2, 0.18, -0.55] },
+    fog: { color: 0x2a120c, near: 280, far: 1300 },
+    hemi: { sky: 0x8a4a3a, ground: 0x281410, intensity: 1.1 },
+    sunlight: { color: 0xffa066, intensity: 2.0 },
+    exposure: 1.42,
+    nebula: 0x6a2a14,
+    planet: { dir: [-0.3, 0.14, -0.86], color: 0xb88a5a, size: 0.3, ring: false },
     palette: [
-      { h: -10, c: [0.16, 0.13, 0.13] },
-      { h: 10, c: [0.26, 0.21, 0.2] },
-      { h: 34, c: [0.38, 0.3, 0.27] },
-      { h: 70, c: [0.3, 0.22, 0.22] },
-      { h: 130, c: [0.5, 0.36, 0.3] },
+      { h: -10, c: [0.22, 0.18, 0.12] },
+      { h: 10, c: [0.4, 0.3, 0.14] },
+      { h: 34, c: [0.56, 0.42, 0.18] },
+      { h: 70, c: [0.4, 0.26, 0.16] },
+      { h: 130, c: [0.5, 0.4, 0.22] },
     ],
-    slopeColor: [0.16, 0.12, 0.11],
+    slopeColor: [0.2, 0.14, 0.1],
     embers: true,
     height(x, z, fbm) {
       const nx = x / 540, nz = z / 540;
-      // central volcano cone with crater
       const r = Math.hypot(x - 60, z + 80);
       const cone = Math.max(0, 1 - r / 420) * 120;
       const crater = Math.max(0, 1 - r / 130) * 70;
       const rough = Math.abs(fbm(nx * 2.1, nz * 2.1)) * 30;
       const flows = Math.abs(fbm(nx * 1.1 + 99, nz * 1.1)) * 999;
-      const channel = Math.max(0, 18 - flows * 0.55); // lava channels
+      const channel = Math.max(0, 18 - flows * 0.55);
       return cone - crater + rough - channel + 8 + rimWall(x, z);
     },
     water: { level: 1, color: 0xff5a18, opacity: 0.95, lava: true, emissive: 2.2 },
     propsSpec: { kind: "spires", count: 80 },
   }),
 
-  // ── 5. NEON RIFT — synthwave canyon under a void sky ──────────
+  // ── 5. GRID SECTOR 7 — synthwave training construct ─────────────
   makeMap({
     id: "neon",
-    name: "Neon Rift",
-    blurb: "A shattered simulation. The grid remembers every shot.",
+    name: "Grid Sector 7",
+    blurb: "A combat simulation that never powered down. The grid remembers.",
     seed: 505,
     sky: { top: 0x070114, horizon: 0xff2e88, sun: 0x66e0ff, sunPos: [0, 0.26, -0.8] },
     fog: { color: 0x1a0533, near: 300, far: 1300 },
     hemi: { sky: 0x4422aa, ground: 0x140a26, intensity: 0.85 },
     sunlight: { color: 0x9fd0ff, intensity: 1.2 },
     exposure: 1.2,
+    nebula: 0xff2e88,
     palette: [
       { h: -12, c: [0.05, 0.02, 0.12] },
       { h: 6, c: [0.1, 0.05, 0.22] },
@@ -180,16 +196,13 @@ export const MAPS = [
     ],
     slopeColor: [0.07, 0.03, 0.16],
     wireframeGlow: 0xff2e88,
-    stars: true,
     height(x, z, fbm) {
       const nx = x / 500, nz = z / 500;
-      // terraced plateaus — quantized noise reads as stepped canyons,
-      // but blended soft enough that every terrace is climbable
       const base = fbm(nx, nz) * 0.5 + 0.5;
       const terrace = Math.round(base * 5) / 5;
       const blend = lerp(base, terrace, 0.45) * 64;
       const rift = Math.abs(fbm(nx * 0.8 + 77, nz * 0.8 - 33)) * 999;
-      const cut = Math.max(0, 15 - rift * 0.6); // the glowing rift channel
+      const cut = Math.max(0, 15 - rift * 0.6);
       const detail = fbm(nx * 5, nz * 5) * 2;
       return blend - cut + detail + rimWall(x, z);
     },
@@ -197,25 +210,27 @@ export const MAPS = [
     propsSpec: { kind: "monoliths", count: 70 },
   }),
 
-  // -- 6. RAZORWASH LABYRINTH - branching canyon slots under copper haze -------
+  // ── 6. VALLES MARINERIS — Martian canyon country ───────────────
   makeMap({
     id: "razorwash",
-    name: "Razorwash Labyrinth",
-    blurb: "High stone tables split by sly canyons that beg for bank shots.",
+    name: "Valles Marineris",
+    blurb: "Rust tables split by sly canyons that beg for bank shots. Phobos rises.",
     seed: 606,
-    sky: { top: 0x5f8fb3, horizon: 0xd6a064, sun: 0xffd58a, sunPos: [0.5, 0.25, -0.42] },
-    fog: { color: 0xb87f55, near: 340, far: 1450 },
-    hemi: { sky: 0xb9d6ee, ground: 0x6a4a32, intensity: 0.75 },
-    sunlight: { color: 0xffc175, intensity: 2.1 },
-    exposure: 1.18,
+    sky: { top: 0x0a0606, horizon: 0x7a3a22, sun: 0xffd0a0, sunPos: [0.5, 0.25, -0.42] },
+    fog: { color: 0x4a241a, near: 380, far: 1600 },
+    hemi: { sky: 0xb98a6a, ground: 0x5a3424, intensity: 0.7 },
+    sunlight: { color: 0xffcaa0, intensity: 2.1 },
+    exposure: 1.16,
+    nebula: 0x6a3422,
+    planet: { dir: [0.7, 0.08, -0.7], color: 0x9a8278, size: 0.06, ring: false },
     palette: [
-      { h: -12, c: [0.32, 0.2, 0.14] },
-      { h: 10, c: [0.5, 0.32, 0.2] },
-      { h: 34, c: [0.64, 0.42, 0.26] },
-      { h: 68, c: [0.43, 0.28, 0.2] },
-      { h: 118, c: [0.26, 0.18, 0.15] },
+      { h: -12, c: [0.34, 0.18, 0.12] },
+      { h: 10, c: [0.54, 0.28, 0.16] },
+      { h: 34, c: [0.7, 0.4, 0.22] },
+      { h: 68, c: [0.48, 0.26, 0.16] },
+      { h: 118, c: [0.3, 0.18, 0.13] },
     ],
-    slopeColor: [0.38, 0.24, 0.18],
+    slopeColor: [0.4, 0.22, 0.15],
     height(x, z, fbm) {
       const nx = x / 560, nz = z / 560;
       const plateau = 46 + fbm(nx * 0.7 - 4, nz * 0.7 + 2) * 18;
@@ -228,28 +243,31 @@ export const MAPS = [
       const h = plateau - slot + shoulders + fbm(nx * 5.5, nz * 5.5) * 2.5;
       return lerp(h, 18 + fbm(nx * 2, nz * 2) * 2, center * 0.88) + rimWall(x, z);
     },
-    propsSpec: { kind: "rocks+cacti", count: 110 },
+    propsSpec: { kind: "spires", count: 110 },
   }),
 
-  // -- 7. LOWTIDE ATOLLS - shallow sea, sand bridges, turret islands ----------
+  // ── 7. TITAN SHALLOWS — methane seas under Saturn ──────────────
   makeMap({
     id: "lowtide",
-    name: "Lowtide Atolls",
-    blurb: "Turrets trade fire across glassy water and exposed coral roads.",
+    name: "Titan Shallows",
+    blurb: "Methane flats and exposed ice roads under a thick orange haze. Saturn looms.",
     seed: 707,
-    sky: { top: 0x2e9fc7, horizon: 0xd8f0da, sun: 0xfff0bd, sunPos: [-0.35, 0.46, 0.25] },
-    fog: { color: 0x9ed6c7, near: 440, far: 1650 },
-    hemi: { sky: 0xbcefff, ground: 0x557b6b, intensity: 1.05 },
-    sunlight: { color: 0xffe6a8, intensity: 2.25 },
-    exposure: 1.32,
+    sky: { top: 0x1a1206, horizon: 0xc98a3a, sun: 0xffe0a0, sunPos: [-0.35, 0.46, 0.25] },
+    fog: { color: 0x8a6024, near: 320, far: 1300 },
+    hemi: { sky: 0xe0b070, ground: 0x5a4a2a, intensity: 1.0 },
+    sunlight: { color: 0xffd88a, intensity: 1.6 },
+    exposure: 1.3,
+    stars: false,
+    nebula: 0xc98a3a,
+    planet: { dir: [-0.4, 0.2, -0.85], color: 0xd8c088, size: 0.36, ring: true },
     palette: [
-      { h: -10, c: [0.32, 0.63, 0.58] },
-      { h: 4, c: [0.72, 0.68, 0.44] },
-      { h: 22, c: [0.82, 0.76, 0.5] },
-      { h: 50, c: [0.52, 0.64, 0.38] },
-      { h: 95, c: [0.34, 0.48, 0.36] },
+      { h: -10, c: [0.34, 0.3, 0.18] },
+      { h: 4, c: [0.6, 0.5, 0.28] },
+      { h: 22, c: [0.72, 0.6, 0.34] },
+      { h: 50, c: [0.5, 0.44, 0.26] },
+      { h: 95, c: [0.36, 0.32, 0.22] },
     ],
-    slopeColor: [0.42, 0.48, 0.34],
+    slopeColor: [0.42, 0.36, 0.22],
     height(x, z, fbm) {
       const nx = x / 620, nz = z / 620;
       const islands = Math.max(0, fbm(nx * 1.6 + 17, nz * 1.6 - 8) + 0.1) * 54;
@@ -260,30 +278,30 @@ export const MAPS = [
       const h = lagoon + islands + barsA + barsB + fbm(nx * 7, nz * 7) * 1.6;
       return lerp(h, 10, center * 0.9) + rimWall(x, z);
     },
-    water: { level: 1.5, color: 0x37b5bf, opacity: 0.7 },
-    propsSpec: { kind: "rocks+cacti", count: 75 },
+    water: { level: 1.5, color: 0xc08a3a, opacity: 0.6 },
+    propsSpec: { kind: "monoliths", count: 75 },
   }),
 
-  // -- 8. REGOLITH SCARS - crater bowls beneath a hard star field -------------
+  // ── 8. LUNA FAR SIDE — crater bowls, hardest star field ────────
   makeMap({
     id: "regolith",
-    name: "Regolith Scars",
-    blurb: "Every old impact is a bunker until someone lobs into it.",
+    name: "Luna Far Side",
+    blurb: "Every old impact is a bunker until someone lobs into it. No Earth here.",
     seed: 808,
-    sky: { top: 0x03070e, horizon: 0x27303c, sun: 0xe2e8f0, sunPos: [0.15, 0.22, -0.72] },
-    fog: { color: 0x2c3238, near: 520, far: 1800 },
-    hemi: { sky: 0xaab6c8, ground: 0x24272b, intensity: 0.62 },
-    sunlight: { color: 0xd8e1ee, intensity: 1.65 },
-    exposure: 1.1,
+    sky: { top: 0x010204, horizon: 0x0e141c, sun: 0xfffaf0, sunPos: [0.15, 0.22, -0.72] },
+    fog: { color: 0x0a0e14, near: 620, far: 2100 },
+    hemi: { sky: 0x6a7280, ground: 0x202327, intensity: 0.46 },
+    sunlight: { color: 0xfff4e2, intensity: 2.7 },
+    exposure: 1.05,
+    nebula: 0x1a2440,
     palette: [
-      { h: -18, c: [0.16, 0.17, 0.18] },
-      { h: 0, c: [0.28, 0.29, 0.29] },
-      { h: 22, c: [0.42, 0.42, 0.4] },
-      { h: 58, c: [0.32, 0.33, 0.34] },
-      { h: 108, c: [0.52, 0.53, 0.52] },
+      { h: -18, c: [0.18, 0.18, 0.19] },
+      { h: 0, c: [0.3, 0.3, 0.31] },
+      { h: 22, c: [0.46, 0.46, 0.45] },
+      { h: 58, c: [0.34, 0.34, 0.35] },
+      { h: 108, c: [0.56, 0.56, 0.56] },
     ],
-    slopeColor: [0.24, 0.25, 0.25],
-    stars: true,
+    slopeColor: [0.24, 0.25, 0.26],
     height(x, z, fbm) {
       const nx = x / 580, nz = z / 580;
       const swell = fbm(nx * 0.6, nz * 0.6) * 22 + 24;
@@ -306,25 +324,26 @@ export const MAPS = [
     propsSpec: { kind: "monoliths", count: 55 },
   }),
 
-  // -- 9. MIRROR SALT - white flats interrupted by blunt blue mesas -----------
+  // ── 9. CERES FLATS — bright salt-ice dwarf planet ──────────────
   makeMap({
     id: "mirrorsalt",
-    name: "Mirror Salt",
-    blurb: "Flat white lanes make every mesa a verdict.",
+    name: "Ceres Flats",
+    blurb: "Blinding salt-ice lanes make every mesa a verdict.",
     seed: 909,
-    sky: { top: 0x84bed2, horizon: 0xf5eee0, sun: 0xffffff, sunPos: [0.48, 0.62, 0.18] },
-    fog: { color: 0xe8e3d4, near: 520, far: 1750 },
-    hemi: { sky: 0xe6f7ff, ground: 0xb7b0a0, intensity: 1.18 },
-    sunlight: { color: 0xfff4de, intensity: 2.0 },
-    exposure: 1.42,
+    sky: { top: 0x060a12, horizon: 0x3a4a5c, sun: 0xffffff, sunPos: [0.48, 0.62, 0.18] },
+    fog: { color: 0x28323e, near: 540, far: 1900 },
+    hemi: { sky: 0xc8dcf0, ground: 0x9aa0a4, intensity: 1.0 },
+    sunlight: { color: 0xfffaf0, intensity: 2.3 },
+    exposure: 1.34,
+    nebula: 0x2a3a5a,
     palette: [
-      { h: -8, c: [0.8, 0.78, 0.68] },
-      { h: 8, c: [0.9, 0.88, 0.78] },
-      { h: 28, c: [0.66, 0.69, 0.68] },
-      { h: 60, c: [0.45, 0.55, 0.58] },
-      { h: 115, c: [0.34, 0.42, 0.46] },
+      { h: -8, c: [0.78, 0.8, 0.82] },
+      { h: 8, c: [0.88, 0.9, 0.92] },
+      { h: 28, c: [0.66, 0.7, 0.74] },
+      { h: 60, c: [0.46, 0.56, 0.62] },
+      { h: 115, c: [0.34, 0.44, 0.52] },
     ],
-    slopeColor: [0.42, 0.45, 0.43],
+    slopeColor: [0.42, 0.48, 0.52],
     height(x, z, fbm) {
       const nx = x / 610, nz = z / 610;
       const flats = fbm(nx * 0.55 + 8, nz * 0.55 - 8) * 4;
@@ -344,29 +363,31 @@ export const MAPS = [
       const h = 8 + flats + caps + pans;
       return lerp(h, 7, center * 0.96) + rimWall(x, z);
     },
-    water: { level: 0, color: 0xddeee9, opacity: 0.36 },
+    water: { level: 0, color: 0xcfe2ec, opacity: 0.34 },
     propsSpec: { kind: "monoliths", count: 65 },
   }),
 
-  // -- 10. GREENBRAID DELTA - jungle islands and switchback rivers ------------
+  // ── 10. XENO DELTA — alien jungle moon, glowing rivers ─────────
   makeMap({
     id: "greenbraid",
-    name: "Greenbraid Delta",
-    blurb: "River fingers split the jungle into ambush lanes.",
+    name: "Xeno Delta",
+    blurb: "Bioluminescent river fingers split the xeno-jungle into ambush lanes.",
     seed: 1010,
-    sky: { top: 0x2f7fa3, horizon: 0xbddf9c, sun: 0xffefb0, sunPos: [-0.25, 0.5, 0.42] },
-    fog: { color: 0x8fbf88, near: 310, far: 1320 },
-    hemi: { sky: 0xb9e8f0, ground: 0x1f4728, intensity: 1.15 },
-    sunlight: { color: 0xffe5a5, intensity: 1.85 },
-    exposure: 1.2,
+    sky: { top: 0x05101c, horizon: 0x1a5a4a, sun: 0xe6ffd6, sunPos: [-0.25, 0.5, 0.42] },
+    fog: { color: 0x123a30, near: 320, far: 1380 },
+    hemi: { sky: 0x6ad8c0, ground: 0x1a4028, intensity: 0.95 },
+    sunlight: { color: 0xe8ffc8, intensity: 1.85 },
+    exposure: 1.18,
+    nebula: 0x1f8a6a,
+    planet: { dir: [0.5, 0.1, -0.82], color: 0x6ab0d8, size: 0.22, ring: false },
     palette: [
-      { h: -10, c: [0.06, 0.22, 0.16] },
-      { h: 6, c: [0.11, 0.34, 0.21] },
-      { h: 28, c: [0.18, 0.45, 0.25] },
-      { h: 58, c: [0.26, 0.42, 0.24] },
-      { h: 106, c: [0.38, 0.36, 0.26] },
+      { h: -10, c: [0.05, 0.2, 0.16] },
+      { h: 6, c: [0.09, 0.32, 0.22] },
+      { h: 28, c: [0.14, 0.44, 0.28] },
+      { h: 58, c: [0.2, 0.42, 0.3] },
+      { h: 106, c: [0.3, 0.4, 0.36] },
     ],
-    slopeColor: [0.18, 0.22, 0.15],
+    slopeColor: [0.14, 0.24, 0.2],
     grass: true,
     height(x, z, fbm) {
       const nx = x / 570, nz = z / 570;
@@ -379,29 +400,31 @@ export const MAPS = [
       const h = banks - channels + levees + fbm(nx * 7, nz * 7) * 2.2;
       return lerp(h, 13, center * 0.9) + rimWall(x, z);
     },
-    water: { level: 2, color: 0x1c6f68, opacity: 0.78 },
+    water: { level: 2, color: 0x18c0a0, opacity: 0.8, energy: true, emissive: 1.4 },
     propsSpec: { kind: "trees+stones", count: 185 },
   }),
 
-  // -- 11. PAINTED NEEDLES - striped hoodoo country in hot pastel light -------
+  // ── 11. OLYMPUS SPIRES — Martian striped hoodoo country ────────
   makeMap({
     id: "paintedneedles",
-    name: "Painted Needles",
-    blurb: "Candy-striped hoodoos turn every shell arc theatrical.",
+    name: "Olympus Spires",
+    blurb: "Wind-striped Martian needles turn every shell arc theatrical.",
     seed: 1111,
-    sky: { top: 0x709ac4, horizon: 0xf0b98e, sun: 0xffdd9e, sunPos: [0.32, 0.36, -0.48] },
-    fog: { color: 0xd79273, near: 360, far: 1450 },
-    hemi: { sky: 0xc8dcf2, ground: 0x734033, intensity: 0.8 },
-    sunlight: { color: 0xffbc87, intensity: 2.15 },
-    exposure: 1.28,
+    sky: { top: 0x0a0606, horizon: 0x9a5638, sun: 0xffd0a0, sunPos: [0.32, 0.36, -0.48] },
+    fog: { color: 0x5a3022, near: 360, far: 1500 },
+    hemi: { sky: 0xc88a64, ground: 0x6a3a2a, intensity: 0.78 },
+    sunlight: { color: 0xffbc87, intensity: 2.1 },
+    exposure: 1.26,
+    nebula: 0x7a3a22,
+    planet: { dir: [-0.45, 0.12, -0.8], color: 0x8a7a6a, size: 0.07, ring: false },
     palette: [
-      { h: -10, c: [0.46, 0.22, 0.19] },
-      { h: 12, c: [0.72, 0.38, 0.28] },
-      { h: 32, c: [0.86, 0.57, 0.4] },
-      { h: 62, c: [0.75, 0.42, 0.5] },
-      { h: 112, c: [0.5, 0.27, 0.36] },
+      { h: -10, c: [0.46, 0.22, 0.18] },
+      { h: 12, c: [0.72, 0.38, 0.26] },
+      { h: 32, c: [0.86, 0.56, 0.38] },
+      { h: 62, c: [0.74, 0.42, 0.46] },
+      { h: 112, c: [0.5, 0.27, 0.34] },
     ],
-    slopeColor: [0.45, 0.25, 0.22],
+    slopeColor: [0.45, 0.25, 0.2],
     height(x, z, fbm) {
       const nx = x / 560, nz = z / 560;
       const wash = 20 + fbm(nx * 0.8, nz * 0.8) * 22;
@@ -416,25 +439,27 @@ export const MAPS = [
     propsSpec: { kind: "spires", count: 125 },
   }),
 
-  // -- 12. BLUEKNIFE GLACIER - crevasse cuts through heavy snow shelves -------
+  // ── 12. ENCELADUS RIFTS — geyser ice moon under Saturn ─────────
   makeMap({
     id: "blueknife",
-    name: "Blueknife Glacier",
-    blurb: "Frozen blue cuts divide the field without stopping the chase.",
+    name: "Enceladus Rifts",
+    blurb: "Blue tiger-stripe crevasses vent ice into the dark. Saturn rules the sky.",
     seed: 1212,
-    sky: { top: 0x14233f, horizon: 0x93b9cf, sun: 0xf6fbff, sunPos: [-0.55, 0.28, -0.25] },
-    fog: { color: 0xa9c7d5, near: 260, far: 1220 },
-    hemi: { sky: 0xc7e7ff, ground: 0x4f6472, intensity: 1.05 },
-    sunlight: { color: 0xeaf7ff, intensity: 1.55 },
-    exposure: 1.16,
+    sky: { top: 0x040810, horizon: 0x2e4a5e, sun: 0xf6fbff, sunPos: [-0.55, 0.28, -0.25] },
+    fog: { color: 0x1a2e3a, near: 340, far: 1450 },
+    hemi: { sky: 0xaad0e8, ground: 0x44606e, intensity: 0.9 },
+    sunlight: { color: 0xeaf7ff, intensity: 1.7 },
+    exposure: 1.14,
+    nebula: 0x2a4a66,
+    planet: { dir: [-0.6, 0.16, -0.78], color: 0xd8c088, size: 0.38, ring: true },
     palette: [
-      { h: -12, c: [0.34, 0.57, 0.66] },
-      { h: 4, c: [0.58, 0.78, 0.86] },
-      { h: 24, c: [0.83, 0.91, 0.95] },
-      { h: 56, c: [0.7, 0.8, 0.88] },
-      { h: 108, c: [0.48, 0.6, 0.7] },
+      { h: -12, c: [0.34, 0.54, 0.64] },
+      { h: 4, c: [0.56, 0.74, 0.84] },
+      { h: 24, c: [0.82, 0.9, 0.95] },
+      { h: 56, c: [0.66, 0.78, 0.88] },
+      { h: 108, c: [0.46, 0.6, 0.72] },
     ],
-    slopeColor: [0.36, 0.46, 0.54],
+    slopeColor: [0.34, 0.46, 0.56],
     snow: true,
     height(x, z, fbm) {
       const nx = x / 590, nz = z / 590;
@@ -447,29 +472,31 @@ export const MAPS = [
       const h = shelf - crevasse + berm + fbm(nx * 8, nz * 8) * 1.7;
       return lerp(h, 15, center * 0.92) + rimWall(x, z);
     },
-    water: { level: -4, color: 0x75c9e8, opacity: 0.82, frozen: true },
+    water: { level: -4, color: 0x6ac4e8, opacity: 0.82, frozen: true, energy: true, emissive: 0.8 },
     propsSpec: { kind: "pines+boulders", count: 115 },
   }),
 
-  // -- 13. RINGFARM BASIN - stepped fields descending to a quiet lake ---------
+  // ── 13. ORBITAL TERRACE — terraformed ring-station decks ───────
   makeMap({
     id: "ringfarm",
-    name: "Ringfarm Basin",
-    blurb: "Terraces make polite stairs for impolite artillery.",
+    name: "Orbital Terrace",
+    blurb: "Stepped station decks make polite stairs for impolite artillery.",
     seed: 1313,
-    sky: { top: 0x5aa3c5, horizon: 0xdde5b2, sun: 0xffedb4, sunPos: [0.4, 0.55, 0.18] },
-    fog: { color: 0xc6d8ad, near: 420, far: 1550 },
-    hemi: { sky: 0xd0ecff, ground: 0x4c5c32, intensity: 1.0 },
+    sky: { top: 0x050a14, horizon: 0x2a5a64, sun: 0xffeec8, sunPos: [0.4, 0.55, 0.18] },
+    fog: { color: 0x163036, near: 440, far: 1650 },
+    hemi: { sky: 0x8ad0e0, ground: 0x3a5232, intensity: 0.9 },
     sunlight: { color: 0xffe0a0, intensity: 1.95 },
-    exposure: 1.22,
+    exposure: 1.2,
+    nebula: 0x2a6a7a,
+    planet: { dir: [0.55, 0.1, -0.8], color: 0x5b86c4, size: 0.26, ring: false },
     palette: [
-      { h: -10, c: [0.22, 0.31, 0.18] },
-      { h: 8, c: [0.36, 0.5, 0.24] },
-      { h: 28, c: [0.52, 0.58, 0.3] },
-      { h: 54, c: [0.62, 0.5, 0.28] },
-      { h: 98, c: [0.4, 0.36, 0.24] },
+      { h: -10, c: [0.2, 0.3, 0.22] },
+      { h: 8, c: [0.32, 0.46, 0.3] },
+      { h: 28, c: [0.46, 0.54, 0.34] },
+      { h: 54, c: [0.5, 0.46, 0.32] },
+      { h: 98, c: [0.36, 0.36, 0.32] },
     ],
-    slopeColor: [0.32, 0.31, 0.2],
+    slopeColor: [0.3, 0.32, 0.26],
     grass: true,
     height(x, z, fbm) {
       const nx = x / 600, nz = z / 600;
@@ -483,29 +510,31 @@ export const MAPS = [
       const h = valley - lake + orchard + lanes + fbm(nx * 5.5, nz * 5.5) * 1.5;
       return lerp(h, 14, center * 0.88) + rimWall(x, z);
     },
-    water: { level: 5, color: 0x3f8585, opacity: 0.76 },
+    water: { level: 5, color: 0x3aa0b0, opacity: 0.74, energy: true, emissive: 1.0 },
     propsSpec: { kind: "trees+stones", count: 160 },
   }),
 
-  // -- 14. MAGMA HALO - ash flats wrapped around a bright lava ring -----------
+  // ── 14. HEPHAESTUS RING — molten moat moon ─────────────────────
   makeMap({
     id: "magmahalo",
-    name: "Magma Halo",
+    name: "Hephaestus Ring",
     blurb: "A molten moat dares commanders to fight across the glow.",
     seed: 1414,
-    sky: { top: 0x20191a, horizon: 0x9b5132, sun: 0xff9c55, sunPos: [-0.18, 0.2, 0.62] },
-    fog: { color: 0x5b3026, near: 250, far: 1180 },
-    hemi: { sky: 0x9c6658, ground: 0x211a18, intensity: 1.15 },
-    sunlight: { color: 0xffa06c, intensity: 1.85 },
-    exposure: 1.48,
+    sky: { top: 0x0a0406, horizon: 0x6a2e16, sun: 0xff9c55, sunPos: [-0.18, 0.2, 0.62] },
+    fog: { color: 0x3a1c14, near: 290, far: 1320 },
+    hemi: { sky: 0x9c5648, ground: 0x201a18, intensity: 1.0 },
+    sunlight: { color: 0xffa06c, intensity: 1.9 },
+    exposure: 1.44,
+    nebula: 0x7a2e16,
+    planet: { dir: [-0.2, 0.12, -0.88], color: 0xc06a3a, size: 0.18, ring: false },
     palette: [
-      { h: -12, c: [0.1, 0.1, 0.09] },
-      { h: 6, c: [0.19, 0.18, 0.16] },
-      { h: 28, c: [0.32, 0.29, 0.24] },
-      { h: 62, c: [0.28, 0.23, 0.2] },
-      { h: 120, c: [0.45, 0.38, 0.32] },
+      { h: -12, c: [0.12, 0.11, 0.1] },
+      { h: 6, c: [0.22, 0.2, 0.17] },
+      { h: 28, c: [0.36, 0.31, 0.25] },
+      { h: 62, c: [0.32, 0.25, 0.21] },
+      { h: 120, c: [0.48, 0.4, 0.33] },
     ],
-    slopeColor: [0.14, 0.12, 0.1],
+    slopeColor: [0.16, 0.13, 0.11],
     embers: true,
     height(x, z, fbm) {
       const nx = x / 560, nz = z / 560;
@@ -523,10 +552,10 @@ export const MAPS = [
     propsSpec: { kind: "spires", count: 95 },
   }),
 
-  // -- 15. FRACTAL PANES - alien plates, broken levels, cold grid light -------
+  // ── 15. FRACTAL CONSTRUCT — alien megastructure plates ─────────
   makeMap({
     id: "fractalpanes",
-    name: "Fractal Panes",
+    name: "Fractal Construct",
     blurb: "Alien tiles tilt the battlefield into a luminous puzzle.",
     seed: 1515,
     sky: { top: 0x020915, horizon: 0x0f4b5c, sun: 0x8ffcff, sunPos: [0.05, 0.3, -0.75] },
@@ -534,15 +563,7 @@ export const MAPS = [
     hemi: { sky: 0x55ccdd, ground: 0x061015, intensity: 0.82 },
     sunlight: { color: 0xb6faff, intensity: 1.25 },
     exposure: 1.26,
-    palette: [
-      { h: -14, c: [0.03, 0.07, 0.09] },
-      { h: 4, c: [0.06, 0.14, 0.16] },
-      { h: 26, c: [0.1, 0.24, 0.25] },
-      { h: 58, c: [0.16, 0.34, 0.33] },
-      { h: 112, c: [0.24, 0.42, 0.38] },
-    ],
-    slopeColor: [0.05, 0.12, 0.13],
-    stars: true,
+    nebula: 0x0f4b5c,
     wireframeGlow: 0x36ffe2,
     height(x, z, fbm) {
       const nx = x / 520, nz = z / 520;
@@ -559,6 +580,109 @@ export const MAPS = [
     },
     water: { level: -6, color: 0x35fff0, opacity: 0.84, energy: true, emissive: 2.0 },
     propsSpec: { kind: "monoliths", count: 90 },
+  }),
+
+  // ── 16. ASTEROID DRIFT — broken rock in deep void (NEW) ────────
+  makeMap({
+    id: "asteroid",
+    name: "Asteroid Drift",
+    blurb: "A captured rock tumbling in the dark. Hard shadows, harder cover.",
+    seed: 1616,
+    sky: { top: 0x010103, horizon: 0x070a12, sun: 0xffffff, sunPos: [0.62, 0.3, -0.5] },
+    fog: { color: 0x05070c, near: 700, far: 2200 },
+    hemi: { sky: 0x44505e, ground: 0x141518, intensity: 0.34 },
+    sunlight: { color: 0xffffff, intensity: 3.1 },
+    exposure: 1.0,
+    nebula: 0x2a2050,
+    palette: [
+      { h: -20, c: [0.16, 0.15, 0.16] },
+      { h: 0, c: [0.26, 0.25, 0.26] },
+      { h: 26, c: [0.4, 0.38, 0.38] },
+      { h: 64, c: [0.3, 0.29, 0.3] },
+      { h: 120, c: [0.5, 0.48, 0.47] },
+    ],
+    slopeColor: [0.2, 0.19, 0.2],
+    height(x, z, fbm) {
+      const nx = x / 480, nz = z / 480;
+      const ridges = Math.pow(Math.abs(fbm(nx * 1.7 + 3, nz * 1.7 - 6)), 0.6) * 70;
+      const chasm = smoothstep(clamp(1 - Math.abs(fbm(nx * 0.9 + 40, nz * 0.9 - 12)) / 0.14, 0, 1)) * 46;
+      const spurs = Math.pow(Math.max(0, fbm(nx * 3.2 - 9, nz * 3.2 + 4)), 2) * 38;
+      const detail = fbm(nx * 7, nz * 7) * 4;
+      const center = smoothstep(clamp(1 - Math.hypot(x, z) / 80, 0, 1));
+      const h = 24 + ridges - chasm + spurs + detail;
+      return lerp(h, 16, center * 0.85) + rimWall(x, z);
+    },
+    propsSpec: { kind: "monoliths", count: 95 },
+  }),
+
+  // ── 17. SATURN'S EDGE — high decks beneath the rings (NEW) ─────
+  makeMap({
+    id: "saturnedge",
+    name: "Saturn's Edge",
+    blurb: "Fight on broken cliff decks while the rings slice the whole sky in half.",
+    seed: 1717,
+    sky: { top: 0x060812, horizon: 0x2a3550, sun: 0xfff0d0, sunPos: [0.3, 0.42, -0.6] },
+    fog: { color: 0x141a2a, near: 460, far: 1750 },
+    hemi: { sky: 0x9aa8d0, ground: 0x3a3e4c, intensity: 0.62 },
+    sunlight: { color: 0xfff2da, intensity: 2.2 },
+    exposure: 1.12,
+    nebula: 0x33408a,
+    planet: { dir: [0.0, 0.22, -0.97], color: 0xe8d8a8, size: 0.55, ring: true },
+    palette: [
+      { h: -14, c: [0.24, 0.24, 0.28] },
+      { h: 4, c: [0.36, 0.36, 0.4] },
+      { h: 28, c: [0.5, 0.49, 0.5] },
+      { h: 62, c: [0.4, 0.4, 0.44] },
+      { h: 118, c: [0.58, 0.57, 0.58] },
+    ],
+    slopeColor: [0.28, 0.28, 0.32],
+    height(x, z, fbm) {
+      const nx = x / 540, nz = z / 540;
+      const base = fbm(nx * 0.9, nz * 0.9) * 0.5 + 0.5;
+      const deck = Math.round(base * 4) / 4;
+      const tiers = lerp(base, deck, 0.7) * 88;
+      const fault = Math.abs(fbm(nx * 1.1 + 22, nz * 1.1 - 50));
+      const drop = smoothstep(clamp(1 - fault / 0.12, 0, 1)) * 40;
+      const center = smoothstep(clamp(1 - Math.hypot(x, z) / 86, 0, 1));
+      const h = tiers - drop + fbm(nx * 6, nz * 6) * 2.4;
+      return lerp(h, 30, center * 0.9) + rimWall(x, z);
+    },
+    propsSpec: { kind: "monoliths", count: 80 },
+  }),
+
+  // ── 18. NOVA WASTES — crystal desert under a dying star (NEW) ──
+  makeMap({
+    id: "novawastes",
+    name: "Nova Wastes",
+    blurb: "Glass dunes and crystal needles burning under a swollen red star.",
+    seed: 1818,
+    sky: { top: 0x12040a, horizon: 0x8a1e2e, sun: 0xff5a3c, sunPos: [-0.3, 0.26, -0.6] },
+    fog: { color: 0x44101a, near: 360, far: 1500 },
+    hemi: { sky: 0xc04a4a, ground: 0x3a1418, intensity: 0.85 },
+    sunlight: { color: 0xff7a5a, intensity: 2.0 },
+    exposure: 1.3,
+    nebula: 0xaa2244,
+    planet: { dir: [-0.32, 0.18, -0.84], color: 0xff6a4a, size: 0.42, ring: false },
+    palette: [
+      { h: -12, c: [0.32, 0.14, 0.18] },
+      { h: 12, c: [0.5, 0.2, 0.24] },
+      { h: 34, c: [0.66, 0.3, 0.3] },
+      { h: 64, c: [0.5, 0.24, 0.34] },
+      { h: 118, c: [0.36, 0.18, 0.34] },
+    ],
+    slopeColor: [0.3, 0.14, 0.18],
+    height(x, z, fbm) {
+      const nx = x / 560, nz = z / 560;
+      const dunes = Math.pow(Math.abs(fbm(nx * 1.4 + 5, nz * 1.4 - 8)), 0.8) * 40;
+      const swell = fbm(nx * 0.5, nz * 0.5) * 22;
+      const crystalNoise = fbm(nx * 3.0 + 60, nz * 3.0 - 22) * 0.5 + 0.5;
+      const needles = Math.pow(Math.max(0, crystalNoise - 0.62) / 0.38, 2.4) * 78;
+      const detail = fbm(nx * 6, nz * 6) * 2.4;
+      const center = smoothstep(clamp(1 - Math.hypot(x, z) / 84, 0, 1));
+      const h = 14 + dunes + swell + needles + detail;
+      return lerp(h, 12, center * 0.9) + rimWall(x, z);
+    },
+    propsSpec: { kind: "spires", count: 120 },
   }),
 ];
 

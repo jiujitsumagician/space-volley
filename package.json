@@ -1,7 +1,7 @@
 {
-  "name": "iron-volley",
+  "name": "space-volley",
   "version": "1.0.0",
-  "description": "IRON VOLLEY — 3D multiplayer tank artillery combat",
+  "description": "SPACE VOLLEY — futuristic off-world tank artillery combat (Iron Volley engine)",
   "type": "module",
   "license": "MIT",
   "scripts": {

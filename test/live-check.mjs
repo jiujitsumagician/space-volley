@@ -1,7 +1,7 @@
 // Smoke-test the deployed GitHub Pages build.
 import { chromium } from "playwright";
 
-const URL = "https://jiujitsumagician.github.io/iron-volley/";
+const URL = "https://jiujitsumagician.github.io/space-volley/";
 const browser = await chromium.launch({
   args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
 });

@@ -345,7 +345,12 @@ function buildGrass(map, heightAt) {
 }
 
 function makeSkyDome(map) {
-  const geo = new THREE.SphereGeometry(2400, 24, 16);
+  const geo = new THREE.SphereGeometry(2400, 32, 20);
+  // Space dressing — every Space Volley world hangs in orbit, so the dome
+  // carries a deep star field, a faint nebula wash, and (optionally) a big
+  // parent planet/moon low on the horizon. Maps opt into the planet via
+  // map.planet; nebula tint defaults to the sky's horizon colour.
+  const planet = map.planet || null;
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
@@ -354,7 +359,13 @@ function makeSkyDome(map) {
       horizon: { value: new THREE.Color(map.sky.horizon) },
       sunColor: { value: new THREE.Color(map.sky.sun) },
       sunDir: { value: new THREE.Vector3(...map.sky.sunPos).normalize() },
-      stars: { value: map.stars ? 1.0 : 0.0 },
+      stars: { value: map.stars === false ? 0.0 : 1.0 },
+      nebula: { value: new THREE.Color(map.nebula ?? map.sky.horizon) },
+      nebulaAmt: { value: map.nebula ? 0.5 : 0.22 },
+      planetDir: { value: new THREE.Vector3(...(planet?.dir ?? [0, -1, 0])).normalize() },
+      planetCol: { value: new THREE.Color(planet?.color ?? 0x808080) },
+      planetSize: { value: planet ? (planet.size ?? 0.16) : 0.0 },
+      planetRing: { value: planet?.ring ? 1.0 : 0.0 },
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
@@ -365,19 +376,73 @@ function makeSkyDome(map) {
     `,
     fragmentShader: /* glsl */ `
       varying vec3 vDir;
-      uniform vec3 top, horizon, sunColor, sunDir;
-      uniform float stars;
+      uniform vec3 top, horizon, sunColor, sunDir, nebula, planetCol;
+      uniform float stars, nebulaAmt, planetSize, planetRing;
+      uniform vec3 planetDir;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vnoise(vec2 p){
+        vec2 i = floor(p), f = fract(p);
+        f = f*f*(3.0-2.0*f);
+        float a = hash(i), b = hash(i+vec2(1,0)), c = hash(i+vec2(0,1)), d = hash(i+vec2(1,1));
+        return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+      }
+      float fbm(vec2 p){
+        float v = 0.0, a = 0.5;
+        for (int i = 0; i < 4; i++){ v += a*vnoise(p); p *= 2.03; a *= 0.5; }
+        return v;
+      }
       void main() {
-        float t = clamp(vDir.y * 1.6 + 0.18, 0.0, 1.0);
+        vec3 dir = normalize(vDir);
+        float t = clamp(dir.y * 1.6 + 0.18, 0.0, 1.0);
         vec3 col = mix(horizon, top, pow(t, 0.8));
-        float s = max(dot(normalize(vDir), sunDir), 0.0);
-        col += sunColor * (pow(s, 600.0) * 2.2 + pow(s, 18.0) * 0.45);
-        if (stars > 0.5 && vDir.y > 0.02) {
-          vec2 sp = vDir.xz / max(vDir.y, 0.05) * 60.0;
-          float st = step(0.9975, hash(floor(sp)));
-          col += vec3(st) * smoothstep(0.02, 0.3, vDir.y);
+
+        // faint nebula clouds, fading out toward the horizon haze
+        float neb = fbm(dir.xz / max(dir.y + 0.35, 0.2) * 2.2 + 11.0);
+        neb = smoothstep(0.45, 0.95, neb) * smoothstep(0.0, 0.4, dir.y);
+        col += nebula * neb * nebulaAmt;
+
+        // star field: two layers for depth, gently twinkling by cell
+        if (stars > 0.5 && dir.y > -0.05) {
+          for (float L = 0.0; L < 2.0; L += 1.0) {
+            vec2 sp = dir.xz / max(dir.y + 0.18, 0.12) * (90.0 + L * 140.0);
+            vec2 cell = floor(sp);
+            float h = hash(cell + L * 7.3);
+            float thresh = 0.992 - L * 0.002;
+            if (h > thresh) {
+              float tw = 0.6 + 0.4 * sin((cell.x + cell.y) * 1.7 + h * 30.0);
+              col += vec3(0.9, 0.95, 1.0) * (h - thresh) / (1.0 - thresh) * tw
+                     * smoothstep(-0.02, 0.25, dir.y);
+            }
+          }
         }
+
+        // parent planet / moon — a shaded disc with a lit crescent + atmo rim
+        if (planetSize > 0.0) {
+          float d = distance(dir, planetDir);
+          float disc = smoothstep(planetSize, planetSize * 0.96, d);
+          if (disc > 0.0) {
+            vec3 up = normalize(cross(planetDir, vec3(0.0, 1.0, 0.001)));
+            vec3 rt = normalize(cross(up, planetDir));
+            vec2 uv = vec2(dot(dir - planetDir, rt), dot(dir - planetDir, up)) / planetSize;
+            float zc = sqrt(max(0.0, 1.0 - dot(uv, uv)));
+            float lit = clamp(dot(normalize(vec3(uv, zc)), normalize(sunDir - planetDir)) * 0.9 + 0.35, 0.08, 1.0);
+            float bands = 0.85 + 0.15 * sin(uv.y * 9.0 + fbm(uv * 3.0) * 4.0);
+            col = mix(col, planetCol * lit * bands, disc);
+          }
+          // atmosphere rim glow
+          float rim = smoothstep(planetSize * 1.16, planetSize, d) - smoothstep(planetSize, planetSize * 0.98, d);
+          col += planetCol * max(rim, 0.0) * 0.6;
+          // thin ring
+          if (planetRing > 0.5) {
+            float rr = abs(d - planetSize * 1.5);
+            float ring = smoothstep(0.012, 0.0, rr) * smoothstep(planetSize, planetSize * 1.5, d);
+            col += planetCol * ring * 0.5;
+          }
+        }
+
+        // sun / local star
+        float s = max(dot(dir, sunDir), 0.0);
+        col += sunColor * (pow(s, 700.0) * 2.4 + pow(s, 20.0) * 0.4);
         gl_FragColor = vec4(col, 1.0);
       }
     `,

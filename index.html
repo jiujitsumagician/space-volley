@@ -4,21 +4,50 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>IRON VOLLEY</title>
+<title>SPACE VOLLEY</title>
 <style>
   :root {
-    --amber: #ffb347;
-    --amber-hot: #ffd27a;
-    --steel: #aebdca;
-    --bg: #07090c;
+    /* SPACE VOLLEY runs an NSDF command-terminal UI — phosphor green chrome
+       over the battle view. (These vars keep the old --amber* names so the
+       whole menu/HUD recolours from one place; the value is green now.) */
+    --amber: #38e070;        /* terminal green (primary UI accent) */
+    --amber-hot: #86ffae;    /* bright phosphor green */
+    --term: #38e070;
+    --term-dim: #1c7a3e;
+    --grid: rgba(80, 255, 150, 0.16);
+    --grid-line: rgba(120, 255, 180, 0.5);
+    --steel: #9fd9c4;
+    --bg: #04070a;
     --danger: #ff4d4d;
     --ok: #6dff8a;
+    --mono: "Consolas", "SFMono-Regular", ui-monospace, "Roboto Mono", monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
-  body { font-family: "Segoe UI", system-ui, sans-serif; color: #e8eef4; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; color: #d6f4e4; }
   #app { position: fixed; inset: 0; }
   canvas { display: block; }
+
+  /* ── command-terminal screen frame (always on, above the battle) ──── */
+  #hudframe {
+    position: fixed; inset: 10px; pointer-events: none; z-index: 8;
+    border: 1px solid var(--grid);
+    border-radius: 6px;
+    box-shadow: inset 0 0 60px rgba(40, 255, 120, 0.05);
+  }
+  #hudframe::before, #hudframe::after {
+    content: ""; position: absolute; inset: 0;
+    background:
+      linear-gradient(var(--grid-line), var(--grid-line)) left 0 top 0/26px 2px no-repeat,
+      linear-gradient(var(--grid-line), var(--grid-line)) left 0 top 0/2px 26px no-repeat,
+      linear-gradient(var(--grid-line), var(--grid-line)) right 0 top 0/26px 2px no-repeat,
+      linear-gradient(var(--grid-line), var(--grid-line)) right 0 top 0/2px 26px no-repeat,
+      linear-gradient(var(--grid-line), var(--grid-line)) left 0 bottom 0/26px 2px no-repeat,
+      linear-gradient(var(--grid-line), var(--grid-line)) left 0 bottom 0/2px 26px no-repeat,
+      linear-gradient(var(--grid-line), var(--grid-line)) right 0 bottom 0/26px 2px no-repeat,
+      linear-gradient(var(--grid-line), var(--grid-line)) right 0 bottom 0/2px 26px no-repeat;
+    filter: drop-shadow(0 0 4px rgba(60, 255, 130, 0.6));
+  }
 
   /* ── overlay layers ─────────────────────────────────────── */
   .layer { position: fixed; inset: 0; pointer-events: none; }
@@ -47,6 +76,7 @@
     z-index: 20;
   }
   .panel {
+    position: relative;
     width: min(860px, 92vw);
     /* Never exceed the viewport — cap to the padded window height and scroll
        internally. dvh tracks mobile browser chrome so nothing hides under it. */
@@ -55,31 +85,49 @@
     overflow-x: hidden;
     text-align: center;
     padding: 36px 44px 44px;
-    background: linear-gradient(180deg, rgba(16,21,29,.92), rgba(10,13,18,.95));
-    border: 1px solid #232c38;
-    border-radius: 18px;
-    box-shadow: 0 30px 80px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
+    /* terminal slab: dark green-tinted glass with a phosphor border + glow */
+    background:
+      linear-gradient(180deg, rgba(8,18,14,.93), rgba(4,11,9,.96));
+    border: 1px solid rgba(80,255,150,.34);
+    border-radius: 8px;
+    box-shadow:
+      0 30px 80px rgba(0,0,0,.6),
+      0 0 38px rgba(40,255,120,.08),
+      inset 0 0 0 1px rgba(80,255,150,.06);
     backdrop-filter: blur(6px);
   }
+  /* inset second frame line (double-rule terminal look) */
+  .panel::before {
+    content: ""; position: absolute; inset: 7px; pointer-events: none;
+    border: 1px solid rgba(80,255,150,.16); border-radius: 4px;
+  }
+  /* faint scanlines */
+  .panel::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 8px;
+    background: repeating-linear-gradient(rgba(90,255,160,.045) 0 1px, transparent 1px 3px);
+    mix-blend-mode: screen;
+  }
+  .panel > * { position: relative; }
   @media (max-width: 560px) {
     .panel { padding: 22px 18px 26px; }
     .choices { gap: 10px; }
   }
   .logo {
-    font-size: clamp(44px, 8vw, 84px);
-    font-weight: 900;
-    letter-spacing: .08em;
+    font-family: var(--mono);
+    font-size: clamp(40px, 7.4vw, 76px);
+    font-weight: 800;
+    letter-spacing: .12em;
     line-height: .95;
-    background: linear-gradient(180deg, #fff 0%, var(--amber-hot) 38%, var(--amber) 55%, #8a4a12 100%);
+    background: linear-gradient(180deg, #eafff2 0%, var(--amber-hot) 42%, var(--amber) 62%, #0e6e34 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    filter: drop-shadow(0 4px 18px rgba(255,140,40,.35));
+    filter: drop-shadow(0 0 22px rgba(56,224,112,.45));
     text-transform: uppercase;
   }
-  .tagline { margin-top: 6px; color: #8fa1b3; letter-spacing: .35em; font-size: 12px; text-transform: uppercase; }
+  .tagline { margin-top: 8px; font-family: var(--mono); color: #6fcf9a; letter-spacing: .34em; font-size: 12px; text-transform: uppercase; }
   .menu-section { margin-top: 28px; }
-  .menu-title { font-size: 12px; letter-spacing: .3em; color: #76879a; text-transform: uppercase; margin-bottom: 14px; }
+  .menu-title { font-family: var(--mono); font-size: 12px; letter-spacing: .3em; color: var(--term); text-transform: uppercase; margin-bottom: 14px; text-shadow: 0 0 10px rgba(56,224,112,.4); }
   .choices { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
   /* vertical menu stack (title screen) */
   .choices.vstack { flex-direction: column; align-items: stretch; flex-wrap: nowrap; max-width: 440px; margin: 0 auto; }
@@ -93,20 +141,23 @@
   .choice {
     min-width: 150px;
     padding: 14px 18px;
-    border: 1px solid #2a3645;
-    border-radius: 12px;
-    background: linear-gradient(180deg, #141b25, #0d1219);
-    color: #cfdae6;
+    border: 1px solid rgba(80,255,150,.18);
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(14,28,21,.92), rgba(7,16,12,.95));
+    color: #cfe8da;
     cursor: pointer;
     transition: transform .12s ease, border-color .12s, box-shadow .12s;
     user-select: none;
   }
-  .choice .big { font-size: 17px; font-weight: 700; }
-  .choice .sub { font-size: 11px; color: #7c8da0; margin-top: 4px; letter-spacing: .04em; }
+  .choice .big { font-size: 17px; font-weight: 700; color: #e6fff0; }
+  .choice .sub { font-size: 11px; color: #79a892; margin-top: 4px; letter-spacing: .04em; }
+  .choice {
+    font-family: var(--mono);
+  }
   .choice:hover {
     transform: translateY(-2px);
     border-color: var(--amber);
-    box-shadow: 0 6px 24px rgba(255,150,50,.18), inset 0 0 0 1px rgba(255,170,80,.25);
+    box-shadow: 0 6px 24px rgba(56,224,112,.2), inset 0 0 0 1px rgba(86,255,174,.28);
   }
   /* Gamepad / keyboard selection cursor. Deliberately much louder than :hover
      so it's always obvious which item the controller is on — a bright ring,
@@ -116,7 +167,7 @@
     outline: 3px solid var(--amber-hot);
     outline-offset: 3px;
     border-color: var(--amber-hot);
-    box-shadow: 0 0 0 2px rgba(255,210,122,.55), 0 10px 34px rgba(255,150,50,.5);
+    box-shadow: 0 0 0 2px rgba(134,255,174,.55), 0 10px 34px rgba(56,224,112,.5);
     animation: focusPulse 1.1s ease-in-out infinite;
   }
   .choice.focus { transform: translateY(-2px) scale(1.02); }
@@ -130,8 +181,8 @@
   }
   .choice.selected {
     border-color: var(--amber);
-    background: linear-gradient(180deg, #2a2014, #161009);
-    box-shadow: inset 0 0 18px rgba(255,150,50,.15), 0 0 0 1px rgba(255,170,80,.35);
+    background: linear-gradient(180deg, #0e2419, #07140d);
+    box-shadow: inset 0 0 18px rgba(56,224,112,.18), 0 0 0 1px rgba(86,255,174,.38);
   }
   .choice.disabled { opacity: .35; pointer-events: none; }
   .choice img.thumb {
@@ -147,17 +198,18 @@
   .row-actions { margin-top: 30px; display: flex; gap: 14px; justify-content: center; }
   .btn {
     padding: 14px 38px;
+    font-family: var(--mono);
     font-size: 15px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase;
-    color: #1a0e02;
-    background: linear-gradient(180deg, var(--amber-hot), var(--amber) 60%, #d98324);
-    border: none; border-radius: 12px; cursor: pointer;
-    box-shadow: 0 8px 26px rgba(255,150,50,.35), inset 0 1px 0 rgba(255,255,255,.5);
+    color: #042210;
+    background: linear-gradient(180deg, var(--amber-hot), var(--amber) 60%, #0f8a42);
+    border: none; border-radius: 8px; cursor: pointer;
+    box-shadow: 0 8px 26px rgba(56,224,112,.35), inset 0 1px 0 rgba(220,255,235,.5);
     transition: transform .12s, filter .12s;
   }
   .btn:hover { transform: translateY(-2px); filter: brightness(1.08); }
   .btn.ghost {
-    color: #cfdae6; background: transparent;
-    border: 1px solid #2a3645; box-shadow: none;
+    color: #bfe8d2; background: transparent;
+    border: 1px solid rgba(80,255,150,.3); box-shadow: none;
   }
   .hint { margin-top: 22px; font-size: 11px; color: #5d6e80; letter-spacing: .08em; }
   kbd {
@@ -169,7 +221,7 @@
   .hud { position: absolute; inset: 0; pointer-events: none; z-index: 4; display: none; }
   .hud .corner { position: absolute; }
   .hpwrap { width: 220px; }
-  .label { font-size: 10px; letter-spacing: .25em; color: #9fb0c2; text-transform: uppercase; text-shadow: 0 1px 3px #000; }
+  .label { font-family: var(--mono); font-size: 10px; letter-spacing: .25em; color: #6fcf9a; text-transform: uppercase; text-shadow: 0 0 8px rgba(56,224,112,.4), 0 1px 3px #000; }
   .bar {
     height: 14px; margin-top: 4px; border-radius: 7px; overflow: hidden;
     background: rgba(8,12,18,.7); border: 1px solid rgba(170,190,210,.25);
@@ -208,14 +260,16 @@
   @keyframes feedin { from { transform: translateX(20px); opacity: 0; } }
   .scorepill {
     position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
-    padding: 6px 18px; border-radius: 999px; font-weight: 800; font-size: 14px;
-    background: rgba(8,12,18,.7); border: 1px solid rgba(170,190,210,.25);
-    letter-spacing: .12em; text-shadow: 0 1px 3px #000;
+    padding: 6px 18px; border-radius: 6px; font-family: var(--mono); font-weight: 800; font-size: 14px;
+    background: rgba(6,16,12,.72); border: 1px solid rgba(80,255,150,.32);
+    color: #cdf6dd; letter-spacing: .12em; text-shadow: 0 0 10px rgba(56,224,112,.4), 0 1px 3px #000;
+    box-shadow: 0 0 18px rgba(40,255,120,.1);
   }
   .toast {
     position: absolute; left: 50%; top: 24%; transform: translateX(-50%);
+    font-family: var(--mono);
     font-size: 22px; font-weight: 900; letter-spacing: .2em; text-transform: uppercase;
-    color: var(--amber-hot); text-shadow: 0 0 18px rgba(255,150,50,.6), 0 2px 4px #000;
+    color: var(--amber-hot); text-shadow: 0 0 18px rgba(56,224,112,.7), 0 2px 4px #000;
     opacity: 0; transition: opacity .2s;
   }
   .minimap {
@@ -263,6 +317,7 @@
 <body>
   <div id="app"></div>
   <div id="divider"></div>
+  <div id="hudframe"></div>
 
   <div id="hud1" class="hud"></div>
   <div id="hud2" class="hud"></div>

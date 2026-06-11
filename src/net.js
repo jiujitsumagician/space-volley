@@ -13,7 +13,7 @@
  * Room codes are 5 characters, mapped to a peer id namespace.
  */
 
-const PREFIX = "iron-volley-v1-";
+const PREFIX = "space-volley-v1-";
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I/L
 
 export function makeRoomCode() {

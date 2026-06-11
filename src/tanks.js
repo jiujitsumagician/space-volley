@@ -2,7 +2,7 @@
 // Unauthorized copying, distribution, or use of this software is strictly prohibited.
 
 /**
- * The twelve chassis of IRON VOLLEY. Stats feed both physics and AI;
+ * The twelve chassis of SPACE VOLLEY. Stats feed both physics and AI;
  * the silhouettes are built procedurally in tank.js so each chassis
  * reads instantly at a distance. SKINS are paint finishes any chassis
  * can wear — solids and generated camo patterns.

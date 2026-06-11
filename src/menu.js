@@ -135,8 +135,8 @@ export class Menu {
   // ── screens ─────────────────────────────────────────────────
   title() {
     this.panel(`
-      <div class="logo">Iron Volley</div>
-      <div class="tagline">Arc the shell. Erase the hill. Win the war.</div>
+      <div class="logo">Space&nbsp;Volley</div>
+      <div class="tagline">NSDF Orbital Command · arc the shell, erase the moon</div>
       <div class="menu-section">
         <div class="choices vstack">
           <div class="choice" data-v="solo">
