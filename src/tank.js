@@ -124,12 +124,14 @@ export class Tank {
     // resist, and even then we creep (a fraction of the step) instead of
     // hard-freezing, so you can always climb out of a crater rim or hill
     // rather than getting pinned against it.
-    if (rise > 1.4) {
-      nx = this.pos.x + (nx - this.pos.x) * 0.3;
-      nz = this.pos.z + (nz - this.pos.z) * 0.3;
-      this.speed *= 0.85;
-    } else if (rise > 0.5) {
-      this.speed *= 1 - clamp((rise - 0.5) * 0.7, 0, 0.35) * dt * 6;
+    if (rise > 2.4) {
+      // Only a near-vertical wall actually checks you now — keep most of the
+      // step and barely bleed speed so tanks power up grades and crater rims.
+      nx = this.pos.x + (nx - this.pos.x) * 0.55;
+      nz = this.pos.z + (nz - this.pos.z) * 0.55;
+      this.speed *= 0.94;
+    } else if (rise > 1.1) {
+      this.speed *= 1 - clamp((rise - 1.1) * 0.4, 0, 0.16) * dt * 6;
     }
 
     // obstacle collision (cylinders)
@@ -316,13 +318,18 @@ export function buildTankMesh(b, team, skin = null) {
 
   // hull — beveled box silhouette via extruded shape
   const hullH = b.hullH, hw = b.hullW / 2, hl = b.hullL / 2;
+  // Sleeker hover-hull silhouette: a long raked front glacis down to a pointed
+  // prow chin, a set-back top deck, and a clipped rear — reads far more like
+  // an NSDF assault sled than a boxy tank. (Collision is a fixed radius, not
+  // this mesh, so reshaping is purely cosmetic.)
   const shape = new THREE.Shape();
-  shape.moveTo(-hl * 0.9, 0);
-  shape.lineTo(-hl, hullH * 0.55);
-  shape.lineTo(-hl * 0.72, hullH);
-  shape.lineTo(hl * 0.62, hullH);
-  shape.lineTo(hl, hullH * 0.5);
-  shape.lineTo(hl * 0.9, 0);
+  shape.moveTo(-hl * 0.84, 0);
+  shape.lineTo(-hl, hullH * 0.5);
+  shape.lineTo(-hl * 0.58, hullH);
+  shape.lineTo(hl * 0.34, hullH);
+  shape.lineTo(hl * 0.9, hullH * 0.46);
+  shape.lineTo(hl, hullH * 0.1);
+  shape.lineTo(hl * 0.84, 0);
   shape.closePath();
   const hullGeo = new THREE.ExtrudeGeometry(shape, { depth: b.hullW, bevelEnabled: false });
   hullGeo.rotateY(Math.PI / 2);
@@ -334,6 +341,24 @@ export function buildTankMesh(b, team, skin = null) {
   const hull = new THREE.Mesh(hullGeo, body);
   hull.castShadow = true;
   root.add(hull);
+
+  // glowing circular drive intakes on each flank (the NSDF hover-tech tell)
+  for (const side of [-1, 1]) {
+    const r = hullH * 0.4;
+    const intake = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.3, 18), glow);
+    intake.rotation.z = Math.PI / 2; // disc faces sideways (+/-X)
+    intake.position.set(side * (hw + 0.04), 1.5 + hullH * 0.52, hl * 0.04);
+    root.add(intake);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r + 0.12, 0.18, 8, 20), dark);
+    ring.rotation.y = Math.PI / 2;
+    ring.position.copy(intake.position);
+    ring.castShadow = true;
+    root.add(ring);
+  }
+  // glowing trim line along the raked prow
+  const prow = new THREE.Mesh(new THREE.BoxGeometry(b.hullW * 0.7, 0.1, 0.5), accent);
+  prow.position.set(0, 1.5 + hullH * 0.12, hl * 0.96);
+  root.add(prow);
 
   // accent stripe down the hull
   const stripe = new THREE.Mesh(new THREE.BoxGeometry(b.hullW * 0.16, 0.12, b.hullL * 0.86), accent);
