@@ -565,6 +565,14 @@ export const MAPS = [
     exposure: 1.26,
     nebula: 0x0f4b5c,
     wireframeGlow: 0x36ffe2,
+    palette: [
+      { h: -14, c: [0.03, 0.07, 0.09] },
+      { h: 4, c: [0.06, 0.14, 0.16] },
+      { h: 26, c: [0.1, 0.24, 0.25] },
+      { h: 58, c: [0.16, 0.34, 0.33] },
+      { h: 112, c: [0.24, 0.42, 0.38] },
+    ],
+    slopeColor: [0.05, 0.12, 0.13],
     height(x, z, fbm) {
       const nx = x / 520, nz = z / 520;
       const plateNoise = fbm(nx * 1.45, nz * 1.45) * 0.5 + 0.5;
