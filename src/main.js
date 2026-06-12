@@ -61,6 +61,7 @@ const menu = new Menu(menuEl, launchMatch, gamepads);
 if (typeof window !== "undefined") window.__MENU = menu;
 
 function launchMatch(config) {
+  audio.musicStart?.("battle"); // crossfade menu → battle soundtrack
   fadeOut(() => {
     endEl.style.display = "none";
     title?.dispose(); title = null; // free the diorama before the match builds
@@ -73,6 +74,7 @@ function launchMatch(config) {
 function showEndScreen(result, config) {
   game?.dispose();
   game = null;
+  audio.musicStart?.("menu"); // crossfade battle → menu soundtrack on the end screen
   endEl.style.display = "flex";
   endEl.innerHTML = `
     <div class="panel">

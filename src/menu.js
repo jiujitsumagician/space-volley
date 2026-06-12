@@ -135,35 +135,80 @@ export class Menu {
   // ── screens ─────────────────────────────────────────────────
   title() {
     this.panel(`
+      <div class="title-bg" aria-hidden="true"></div>
       <div class="logo">Space&nbsp;Volley</div>
       <div class="tagline">NSDF Orbital Command · arc the shell, erase the moon</div>
+      <div class="title-status">
+        <span>SYSTEMS NOMINAL</span>
+        <span>ORBIT LOCKED</span>
+        <span>GUNS HOT</span>
+      </div>
       <div class="menu-section">
         <div class="choices vstack">
           <div class="choice" data-v="solo">
-            <div class="big">⚔ SOLO OPS</div>
+            <div class="glyph">⚔</div>
+            <div class="big">SOLO OPS</div>
             <div class="sub">You vs computer-controlled tanks</div>
+            <div class="arrow">▸</div>
           </div>
           <div class="choice" data-v="versus">
-            <div class="big">⚔⚔ SPLIT-SCREEN VERSUS</div>
+            <div class="glyph">⚔⚔</div>
+            <div class="big">SPLIT-SCREEN VERSUS</div>
             <div class="sub">Two commanders — keyboard halves or gamepads</div>
+            <div class="arrow">▸</div>
           </div>
           <div class="choice" data-v="online">
-            <div class="big">🌐 ONLINE VERSUS</div>
+            <div class="glyph">🌐</div>
+            <div class="big">ONLINE VERSUS</div>
             <div class="sub">Host a room or join with a code</div>
+            <div class="arrow">▸</div>
           </div>
           <div class="choice" data-v="options">
-            <div class="big">⚙ OPTIONS</div>
+            <div class="glyph">⚙</div>
+            <div class="big">OPTIONS</div>
             <div class="sub">Controls · gamepad · audio</div>
+            <div class="arrow">▸</div>
+          </div>
+          <div class="choice" data-v="credits">
+            <div class="glyph">★</div>
+            <div class="big">CREDITS</div>
+            <div class="sub">Music &amp; sound — sources and licenses</div>
+            <div class="arrow">▸</div>
           </div>
         </div>
       </div>
     `);
+    this.el.querySelector(".panel")?.classList.add("title-screen");
+    this.refreshFocusables();
     this.bindChoices((v) => {
       if (v === "options") return this.options();
       if (v === "online") return this.onlineMenu();
+      if (v === "credits") return this.credits();
       this.state = { mode: v, players: [] };
       this.tankSelect(0);
     });
+  }
+
+  // ── credits: CC0 music + sound attributions (reachable from the title) ──
+  credits() {
+    this.panel(`
+      <div class="logo" style="font-size:42px;">Credits</div>
+      <div class="tagline">audio assets · all CC0 / public domain</div>
+      <div class="menu-section">
+        <div class="sub" style="max-width:600px; margin:0 auto; line-height:1.9; text-align:left;">
+          <b style="color:#e6fff0;">Music &amp; sound effects</b> are released under
+          <b>Creative Commons Zero (CC0 1.0)</b> — public domain, no attribution
+          required. Tracks and sound effects sourced from
+          <b style="color:#86ffae;">OpenGameArt.org</b>.<br/><br/>
+          Menu &amp; battle loops: “Menu Music”, “Battle Theme A”, “Random Battle”,
+          “High Alert”, “On Patrol”, “Eye of the Storm”, “Galactic Temple”,
+          “Let the Games Begin”, “Another Space Background Track”.<br/><br/>
+          See <b>CREDITS.md</b> in the project root for the full list.
+        </div>
+      </div>
+      <div class="row-actions"><button class="btn" data-back>← Back</button></div>
+    `);
+    this.el.querySelector("[data-back]").onclick = () => this.title();
   }
 
   // ── ONLINE: lobby flow ───────────────────────────────────────

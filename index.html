@@ -6,6 +6,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SPACE VOLLEY</title>
 <style>
+  /* self-hosted fonts (offline, no CDN) */
+  @font-face{font-family:'Orbitron';src:url('assets/fonts/Orbitron.ttf') format('truetype');font-weight:400 900;font-style:normal;font-display:swap;}
+  @font-face{font-family:'Rajdhani';src:url('assets/fonts/Rajdhani-Regular.ttf') format('truetype');font-weight:400 500;font-style:normal;font-display:swap;}
+  @font-face{font-family:'Rajdhani';src:url('assets/fonts/Rajdhani-SemiBold.ttf') format('truetype');font-weight:600;font-style:normal;font-display:swap;}
+  @font-face{font-family:'Rajdhani';src:url('assets/fonts/Rajdhani-Bold.ttf') format('truetype');font-weight:700;font-style:normal;font-display:swap;}
   :root {
     /* SPACE VOLLEY runs an NSDF command-terminal UI — phosphor green chrome
        over the battle view. (These vars keep the old --amber* names so the
@@ -21,10 +26,13 @@
     --danger: #ff4d4d;
     --ok: #6dff8a;
     --mono: "Consolas", "SFMono-Regular", ui-monospace, "Roboto Mono", monospace;
+    /* Identity fonts: Orbitron = logo/display, Rajdhani = UI body. */
+    --display: "Orbitron", "Consolas", ui-monospace, monospace;
+    --ui: "Rajdhani", "Segoe UI", system-ui, sans-serif;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
-  body { font-family: "Segoe UI", system-ui, sans-serif; color: #d6f4e4; }
+  body { font-family: var(--ui); color: #d6f4e4; }
   #app { position: fixed; inset: 0; }
   canvas { display: block; }
 
@@ -113,10 +121,10 @@
     .choices { gap: 10px; }
   }
   .logo {
-    font-family: var(--mono);
+    font-family: var(--display);
     font-size: clamp(40px, 7.4vw, 76px);
-    font-weight: 800;
-    letter-spacing: .12em;
+    font-weight: 900;
+    letter-spacing: .1em;
     line-height: .95;
     background: linear-gradient(180deg, #eafff2 0%, var(--amber-hot) 42%, var(--amber) 62%, #0e6e34 100%);
     -webkit-background-clip: text;
@@ -128,6 +136,116 @@
   .tagline { margin-top: 8px; font-family: var(--mono); color: #6fcf9a; letter-spacing: .34em; font-size: 12px; text-transform: uppercase; }
   .menu-section { margin-top: 28px; }
   .menu-title { font-family: var(--mono); font-size: 12px; letter-spacing: .3em; color: var(--term); text-transform: uppercase; margin-bottom: 14px; text-shadow: 0 0 10px rgba(56,224,112,.4); }
+
+  /* ── TITLE SCREEN: a polished military-sci-fi hero ──────────── */
+  /* Marked on the title panel via .panel.title-screen (set from menu.js). */
+  .panel.title-screen { padding-top: 30px; }
+  .title-screen .logo {
+    font-size: clamp(30px, 6vw, 62px);
+    letter-spacing: .04em;
+    line-height: .96;
+    position: relative;
+    max-width: 100%;
+    animation: logoGlow 3.6s ease-in-out infinite;
+  }
+  @keyframes logoGlow {
+    0%, 100% { filter: drop-shadow(0 0 18px rgba(56,224,112,.35)); }
+    50%      { filter: drop-shadow(0 0 34px rgba(86,255,174,.62)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .title-screen .logo { animation: none; }
+  }
+  /* sweeping scan-glint across the logo */
+  .title-screen .logo::after {
+    content: ""; position: absolute; inset: -6% -4%;
+    background: linear-gradient(115deg, transparent 38%, rgba(190,255,220,.5) 48%, transparent 58%);
+    mix-blend-mode: screen; pointer-events: none;
+    transform: translateX(-120%);
+    animation: logoSweep 5.5s ease-in-out infinite;
+  }
+  @keyframes logoSweep {
+    0%, 62% { transform: translateX(-120%); }
+    78%     { transform: translateX(120%); }
+    100%    { transform: translateX(120%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .title-screen .logo::after { animation: none; opacity: 0; }
+  }
+  /* call-sign rule under the logo */
+  .title-screen .tagline {
+    position: relative; display: inline-block; padding: 0 18px; margin-top: 12px;
+  }
+  .title-screen .tagline::before, .title-screen .tagline::after {
+    content: ""; position: absolute; top: 50%; width: 46px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--term));
+    box-shadow: 0 0 8px rgba(56,224,112,.6);
+  }
+  .title-screen .tagline::before { right: 100%; }
+  .title-screen .tagline::after { left: 100%; transform: scaleX(-1); }
+  /* status strip above the menu */
+  .title-status {
+    display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+    margin: 22px auto 4px; font-family: var(--mono); font-size: 10px;
+    letter-spacing: .26em; text-transform: uppercase; color: #5fb98a;
+  }
+  .title-status span { display: inline-flex; align-items: center; gap: 7px; }
+  .title-status span::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--amber-hot); box-shadow: 0 0 8px var(--amber-hot);
+    animation: statBlink 2.2s ease-in-out infinite;
+  }
+  @keyframes statBlink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .title-status span::before { animation: none; } }
+  /* drifting starfield / radar-sweep accents behind the title menu (CSS only) */
+  .title-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: 8px; z-index: 0; }
+  .title-bg::before {
+    content: ""; position: absolute; inset: -40%;
+    background:
+      radial-gradient(1px 1px at 20% 30%, rgba(150,255,190,.7), transparent),
+      radial-gradient(1px 1px at 70% 60%, rgba(120,255,170,.55), transparent),
+      radial-gradient(1px 1px at 40% 80%, rgba(180,255,210,.5), transparent),
+      radial-gradient(1px 1px at 85% 25%, rgba(120,255,170,.55), transparent),
+      radial-gradient(1px 1px at 55% 15%, rgba(150,255,190,.6), transparent),
+      radial-gradient(1px 1px at 10% 70%, rgba(120,255,170,.5), transparent);
+    animation: starDrift 24s linear infinite;
+    opacity: .5;
+  }
+  @keyframes starDrift { from { transform: translateY(0); } to { transform: translateY(8%); } }
+  .title-bg::after {
+    content: ""; position: absolute; left: 50%; top: 38%;
+    width: 150%; aspect-ratio: 1; transform: translate(-50%, -50%);
+    background: conic-gradient(from 0deg, rgba(56,224,112,.10) 0deg, transparent 38deg);
+    animation: radarSweep 7s linear infinite;
+  }
+  @keyframes radarSweep { to { transform: translate(-50%, -50%) rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .title-bg::before, .title-bg::after { animation: none; } }
+  .title-screen > * { position: relative; z-index: 1; }
+  /* refined vertical menu cards on the title screen */
+  .title-screen .choices.vstack { gap: 12px; max-width: 460px; }
+  .title-screen .choices.vstack .choice {
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+    gap: 4px 16px; padding: 15px 20px;
+    background: linear-gradient(100deg, rgba(14,30,22,.94), rgba(7,17,12,.96));
+    transition: transform .14s ease, border-color .14s, box-shadow .14s, background .14s;
+  }
+  .title-screen .choice .glyph {
+    grid-row: 1 / span 2; font-size: 22px; line-height: 1; width: 30px; text-align: center;
+    filter: drop-shadow(0 0 6px rgba(56,224,112,.5));
+  }
+  .title-screen .choice .big {
+    font-family: var(--display); font-weight: 700; font-size: 16px; letter-spacing: .08em;
+  }
+  .title-screen .choice .sub { grid-column: 2 / span 2; }
+  .title-screen .choice .arrow {
+    grid-row: 1 / span 2; font-family: var(--mono); color: var(--term);
+    opacity: 0; transform: translateX(-6px); transition: opacity .14s, transform .14s;
+  }
+  .title-screen .choice:hover, .title-screen .choice.focus {
+    background: linear-gradient(100deg, rgba(20,44,32,.96), rgba(9,22,16,.97));
+  }
+  .title-screen .choice:hover .arrow, .title-screen .choice.focus .arrow {
+    opacity: 1; transform: translateX(0);
+  }
   .choices { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
   /* vertical menu stack (title screen) */
   .choices.vstack { flex-direction: column; align-items: stretch; flex-wrap: nowrap; max-width: 440px; margin: 0 auto; }
@@ -152,7 +270,7 @@
   .choice .big { font-size: 17px; font-weight: 700; color: #e6fff0; }
   .choice .sub { font-size: 11px; color: #79a892; margin-top: 4px; letter-spacing: .04em; }
   .choice {
-    font-family: var(--mono);
+    font-family: var(--ui);
   }
   .choice:hover {
     transform: translateY(-2px);
@@ -198,8 +316,8 @@
   .row-actions { margin-top: 30px; display: flex; gap: 14px; justify-content: center; }
   .btn {
     padding: 14px 38px;
-    font-family: var(--mono);
-    font-size: 15px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase;
+    font-family: var(--display);
+    font-size: 14px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
     color: #042210;
     background: linear-gradient(180deg, var(--amber-hot), var(--amber) 60%, #0f8a42);
     border: none; border-radius: 8px; cursor: pointer;

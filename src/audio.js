@@ -1,10 +1,69 @@
 // © 2026 [YOUR NAME HERE]. All rights reserved.
 // Unauthorized copying, distribution, or use of this software is strictly prohibited.
 
+import { musicPlay, musicHalt, musicVolume as musicSetVol, musicResume } from "./music.js";
+
 /** @typedef {{ pan?: number, gain?: number }} AudioOpts */
 /** @typedef {{ setIntensity(v: number): void, setPan(p: number): void, stop(): void }} EngineHandle */
 
 const EPS = 0.0001;
+
+// ── downloaded SFX samples (layered on top of the procedural synth) ─────
+// Each event also fires a matching one-shot sample. Loads are lazy + fully
+// fail-safe: a missing/undecodable file just leaves the synth running alone.
+const SFX_FILES = {
+  cannon: "./assets/sfx/cannon_fire.ogg",
+  explosion: "./assets/sfx/explosion.ogg",
+  impact: "./assets/sfx/impact.ogg",
+  uiClick: "./assets/sfx/ui_click.ogg",
+  uiRollover: "./assets/sfx/ui_rollover.ogg",
+};
+/** @type {Record<string, AudioBuffer|null>} */
+const sfxBuffers = {};
+const sfxPending = {};
+
+function loadSfx(name) {
+  if (!ctx || name in sfxBuffers || sfxPending[name]) return;
+  const url = SFX_FILES[name];
+  if (!url) return;
+  sfxPending[name] = true;
+  fetch(url)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error("404"))))
+    .then((buf) => /** @type {AudioContext} */ (ctx).decodeAudioData(buf))
+    .then((decoded) => { sfxBuffers[name] = decoded; })
+    .catch(() => { sfxBuffers[name] = null; }); // silent: synth still plays
+}
+
+function preloadSfx() {
+  Object.keys(SFX_FILES).forEach(loadSfx);
+}
+
+/** Play a downloaded sample one-shot through the master chain. No-op if absent. */
+function playSample(name, gain = 1, opts) {
+  if (!usable()) return;
+  const buf = sfxBuffers[name];
+  if (!buf) { loadSfx(name); return; }
+  try {
+    const ac = /** @type {AudioContext} */ (ctx);
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const g = ac.createGain();
+    g.gain.value = clamp(opts?.gain ?? 1) * gain;
+    let tail = /** @type {AudioNode} */ (g);
+    src.connect(g);
+    if (opts && Number.isFinite(opts.pan)) {
+      const pan = ac.createStereoPanner();
+      pan.pan.value = clamp(/** @type {number} */ (opts.pan), -1, 1);
+      g.connect(pan);
+      tail = pan;
+    }
+    tail.connect(/** @type {DynamicsCompressorNode} */ (compressor));
+    src.start();
+    src.onended = () => { try { src.disconnect(); g.disconnect(); } catch { /* done */ } };
+  } catch {
+    /* fail-safe: ignore */
+  }
+}
 
 /** @type {AudioContext | null} */
 let ctx = null;
@@ -39,6 +98,7 @@ function attachResumeGesture() {
   gestureAttached = true;
   const resume = () => {
     if (ctx && ctx.state !== "closed") void ctx.resume();
+    musicResume(); // unblock streamed music if autoplay was gated
   };
   window.addEventListener("pointerdown", resume, { once: true, passive: true });
   window.addEventListener("keydown", resume, { once: true, passive: true });
@@ -72,6 +132,7 @@ function ensureContext() {
   noiseBuffer = makeNoiseBuffer(ctx);
   updateMasterGain();
   attachResumeGesture();
+  preloadSfx();
   return ctx;
 }
 
@@ -155,6 +216,7 @@ function thump(freqA, freqB, dur, gain, opts) {
 }
 
 function cannon(opts) {
+  playSample("cannon", 0.85, opts);
   const v = voice(opts, 1);
   if (!v) return;
   const ac = v.ac;
@@ -237,6 +299,7 @@ function laser(opts) {
 
 function explosion(size = 0.5, opts) {
   const s = clamp(size);
+  playSample("explosion", 0.7 + s * 0.4, opts);
   const v = voice(opts, 0.85 + s * 0.5);
   if (!v) return;
   const ac = v.ac;
@@ -308,6 +371,7 @@ function fire(opts) {
 }
 
 function ricochet(opts) {
+  playSample("impact", 0.6, opts);
   const v = voice(opts, 0.7);
   if (!v) return;
   const ac = v.ac;
@@ -328,6 +392,7 @@ function ricochet(opts) {
 }
 
 function hit(opts) {
+  playSample("impact", 0.7, opts);
   const v = voice(opts, 0.85);
   if (!v) return;
   const ac = v.ac;
@@ -415,10 +480,12 @@ function death(opts) {
 }
 
 function uiMove(opts) {
+  playSample("uiRollover", 0.5, opts);
   thump(620, 460, 0.06, 0.22, opts);
 }
 
 function uiSelect(opts) {
+  playSample("uiClick", 0.6, opts);
   const v = voice(opts, 0.28);
   if (!v) return;
   const ac = v.ac;
@@ -657,9 +724,11 @@ function scheduleMusic() {
   }
 }
 
-function musicStart(trackName = "battle") {
+// Procedural synth soundtrack — kept as a graceful fallback for the streamed
+// tracks (used only when HTMLAudioElement isn't available).
+function musicStartSynth(trackName = "battle") {
   if (!usable()) return;
-  musicStop(0);
+  musicStopSynth(0);
   const ac = /** @type {AudioContext} */ (ctx);
   musicBus = ac.createGain();
   musicBus.gain.value = 1;
@@ -672,7 +741,26 @@ function musicStart(trackName = "battle") {
   scheduleMusic();
 }
 
+const streamedMusicAvailable = () => typeof Audio !== "undefined" && typeof document !== "undefined";
+
+function musicStart(trackName = "battle") {
+  const kind = trackName === "menu" ? "menu" : "battle";
+  if (streamedMusicAvailable()) {
+    musicStopSynth(0.3);   // stop any synth fallback that was running
+    musicSetVol(musicVolume);
+    musicPlay(kind);       // primary: downloaded, looping, crossfading track
+    return;
+  }
+  // No HTMLAudio (e.g. headless) — fall back to the procedural synth.
+  musicStartSynth(kind);
+}
+
 function musicStop(fade = 0.5) {
+  musicHalt(Math.max(0, fade) * 1000); // fade out streamed track
+  musicStopSynth(fade);
+}
+
+function musicStopSynth(fade = 0.5) {
   if (music) {
     globalThis.clearInterval(music.timer);
     music = null;
@@ -728,5 +816,6 @@ export const audio = {
   setMusicVolume(v) {
     musicVolume = clamp(v);
     if (musicGain && ctx) musicGain.gain.setTargetAtTime(musicVolume, ctx.currentTime, 0.03);
+    musicSetVol(musicVolume); // streamed soundtrack follows the same volume
   },
 };
