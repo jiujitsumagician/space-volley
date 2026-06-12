@@ -7,6 +7,7 @@ import { Menu } from "./menu.js";
 import { TitleScene } from "./title.js";
 import { audio } from "./audio.js";
 import { GamepadManager } from "./gamepad.js";
+import { preloadModels } from "./models.js";
 
 // ── renderer ─────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -183,6 +184,12 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // ── boot: URL params let tests jump straight into a match ────
+// Preload cosmetic GLB models BEFORE any world/tank mesh is built so props
+// and the tank hull can use them on the very first match (the diorama and
+// ?test boot both build synchronously). Fully fail-safe: if this rejects or
+// stalls, every builder falls back to its procedural mesh.
+try { await preloadModels(); } catch { /* procedural fallback */ }
+
 const qp = new URLSearchParams(location.search);
 if (qp.has("test")) {
   // ?test&map=dunes&bots=3&players=1&chassis=viper&diff=1

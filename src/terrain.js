@@ -11,6 +11,7 @@
 import * as THREE from "three";
 import { WORLD_SIZE, makeHeightFn } from "./maps.js";
 import { seededRng, clamp, lerp } from "./util.js";
+import { getModel, fitModel } from "./models.js";
 
 const GRID = 220; // segments per side
 
@@ -159,7 +160,11 @@ export function buildWorld(map) {
     roughness: 0.96,
     metalness: 0.02,
     map: detailTexture(),
+    normalMap: groundNormalTexture(),
   });
+  // Subtle normal detail — vertex colours still carry the per-map palette, the
+  // tiled rock normal just adds surface relief catching the light. Cosmetic.
+  mat.normalScale.set(0.6, 0.6);
   const terrainMesh = new THREE.Mesh(geo, mat);
   terrainMesh.receiveShadow = true;
   terrainMesh.name = "terrain";
@@ -246,6 +251,10 @@ function markRange(attr, start, count) {
 }
 
 // ── shared micro-noise detail texture (multiplies vertex colors) ──
+// Tries the CC0 ground-rock COLOR photo first (gives real grain to every
+// surface); if it can't be loaded it stays the original bright micro-noise so
+// the per-map palette is preserved. The texture is kept near-white-average via
+// a light noise base under it so it never crushes the vertex-colour palette.
 let _detailTex = null;
 function detailTexture() {
   if (_detailTex) return _detailTex;
@@ -262,7 +271,45 @@ function detailTexture() {
   _detailTex = new THREE.CanvasTexture(c);
   _detailTex.wrapS = _detailTex.wrapT = THREE.RepeatWrapping;
   _detailTex.repeat.set(110, 110);
+  // Lazily blend in the real rock-grain photo at low opacity once it decodes
+  // (TextureLoader is async; the canvas keeps working until then).
+  try {
+    new THREE.ImageLoader().load(
+      "assets/textures/ground_rock_color.jpg",
+      (im) => {
+        ctx.globalAlpha = 0.35;
+        ctx.globalCompositeOperation = "multiply";
+        ctx.drawImage(im, 0, 0, 256, 256);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "source-over";
+        _detailTex.needsUpdate = true;
+      },
+      undefined,
+      () => { /* keep noise-only */ }
+    );
+  } catch { /* keep noise-only */ }
   return _detailTex;
+}
+
+// ── tiled ground normal map (surface relief, no colour impact) ──
+let _groundNrm = null;
+function groundNormalTexture() {
+  if (_groundNrm !== null) return _groundNrm || undefined;
+  try {
+    _groundNrm = new THREE.TextureLoader().load(
+      "assets/textures/ground_rock_normal.jpg",
+      undefined,
+      undefined,
+      // fail-safe: on 404 blank the already-applied texture so no broken normal shows
+      (t) => { try { if (_groundNrm && _groundNrm.image !== undefined) { _groundNrm.image = null; _groundNrm.needsUpdate = true; } } catch {} _groundNrm = false; }
+    );
+    _groundNrm.wrapS = _groundNrm.wrapT = THREE.RepeatWrapping;
+    _groundNrm.repeat.set(60, 60);
+    return _groundNrm;
+  } catch {
+    _groundNrm = false;
+    return undefined;
+  }
 }
 
 // ── soft billboard clouds ──────────────────────────────────────
@@ -498,6 +545,12 @@ function buildProps(map, heightAt, obstacles) {
         break;
     }
     if (!mesh) continue;
+    // Cosmetic-only model swap: replace the procedural prop with a CC0
+    // low-poly GLB (space-appropriate rocks / boulders / crystals / spires)
+    // fitted to the SAME footprint the collider uses. Collider entries below
+    // are untouched. If no model is cached, keep the procedural mesh.
+    const model = propModel(kind, v, radius);
+    if (model) mesh = model;
     mesh.position.set(p.x, p.y - 0.4, p.z);
     mesh.rotation.y = rng() * Math.PI * 2;
     const s = 0.8 + rng() * 0.7;
@@ -507,6 +560,32 @@ function buildProps(map, heightAt, obstacles) {
     obstacles.push({ x: p.x, z: p.z, r: radius * s, h: height * s, y: p.y, hp: hp * s, kind, mesh, debrisColor });
   }
   return g;
+}
+
+// Map a prop kind to suitable SPACE props (lunar / Mars / ice / alien): rocks,
+// boulders, crystals, alien spires. No Earth trees on airless worlds — every
+// "tree"/"cactus" kind becomes a rock or crystal. Returns a fitted clone whose
+// horizontal footprint ≈ the collider diameter (radius*2), or null to fall back
+// to the procedural mesh. Cosmetic only — colliders are unchanged.
+const PROP_MODELS = {
+  rock: ["rock_01", "rock_02", "boulder_02"],
+  stone: ["boulder_02", "rock_01"],
+  spire: ["spire_01", "crystal_01"],
+  monolith: ["crystal_01", "crystal_02"],
+  tree: ["crystal_02", "rock_02", "crystal_01"],   // airless world: crystal/rock, never foliage
+  cactus: ["crystal_02", "crystal_01"],            // desert plant → small crystal spike
+};
+function propModel(kind, v, radius) {
+  const names = PROP_MODELS[kind];
+  if (!names) return null;
+  // Derive the variant from the already-rolled 'v' (the kind selector) so the
+  // seeded RNG stream is byte-identical to the pre-model build — prop rotation,
+  // scale, and collider radius (radius*s) stay exactly as before.
+  const name = names[Math.min(names.length - 1, (v * names.length) | 0)];
+  const obj = getModel(name);
+  if (!obj) return null;
+  fitModel(obj, radius * 2);
+  return obj;
 }
 
 const M = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.9, ...opts });

@@ -141,6 +141,15 @@ export class Effects {
       this._v2.z += this._rand(-3.2, 3.2);
       this._spawnParticle(p, this._v2, 0.45, this._rand(1.1, 2.6), this._rand(3.5, 8), 0x6b6863, 0.18, 1.6, 0.18);
     }
+    // cosmetic: a quick spray of bright forward embers down the bore for extra
+    // muzzle punch (purely visual — no gameplay reads these)
+    for (let i = 0; i < 8; i++) {
+      this._v2.copy(d).multiplyScalar(this._rand(14, 30));
+      this._v2.x += this._rand(-2.0, 2.0);
+      this._v2.y += this._rand(-1.0, 2.2);
+      this._v2.z += this._rand(-2.0, 2.0);
+      this._spawnParticle(p, this._v2, this._rand(0.18, 0.34), 0.2, 0.04, 0xffd27a, -6, 1, 1);
+    }
   }
 
   mgFlash(pos) {
@@ -269,6 +278,10 @@ export class Effects {
     for (let i = 0; i < count; i++) {
       this._v0.set(this._rand(-1.6, 1.6), this._rand(0.25, 1.1), this._rand(-1.6, 1.6));
       this._spawnParticle(pos, this._v0, this._rand(0.55, 0.85), this._rand(1.6, 2.8), this._rand(5, 9), 0xb79a6d, 0.12, 0.82, 0.28);
+      // cosmetic: a fainter, lighter regolith puff that lingers and drifts up —
+      // sells low-gravity dust kicked by the hover drive
+      this._v0.set(this._rand(-1.0, 1.0), this._rand(0.6, 1.4), this._rand(-1.0, 1.0));
+      this._spawnParticle(pos, this._v0, this._rand(0.9, 1.4), this._rand(2.4, 3.6), this._rand(7, 11), 0xd8c8a8, 0.04, 0.7, 0.16);
     }
   }
 

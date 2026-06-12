@@ -15,6 +15,9 @@ const MIME = {
   ".jpg": "image/jpeg",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
+  ".glb": "model/gltf-binary",
+  ".hdr": "image/vnd.radiance",
+  ".ttf": "font/ttf",
 };
 
 createServer(async (req, res) => {

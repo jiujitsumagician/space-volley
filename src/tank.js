@@ -11,6 +11,7 @@
 import * as THREE from "three";
 import { clamp, lerp, angleDelta } from "./util.js";
 import { WORLD_SIZE } from "./maps.js";
+import { getModel } from "./models.js";
 
 // hard playable boundary — sits just inside the rim wall's base. With the
 // new climb-through traction a tank could otherwise crest the rim ramp and
@@ -341,6 +342,38 @@ export function buildTankMesh(b, team, skin = null) {
   const hull = new THREE.Mesh(hullGeo, body);
   hull.castShadow = true;
   root.add(hull);
+
+  // ── GLB vehicle hull (cosmetic) ──────────────────────────────
+  // Drop a CC0 low-poly tank body in as the visible chassis, fitted to this
+  // build's hull box. The procedural turret/barrel/muzzle/MG rig below is kept
+  // intact and rides on top, so aiming + firing are byte-for-byte unchanged
+  // (the empties the weapon code reads are still the procedural ones). If the
+  // model isn't cached we keep the procedural extruded hull. Static-hull path
+  // per spec — no reliance on rigging the model's own turret/gun.
+  const glbHull = getModel("vehicle");
+  if (glbHull) {
+    const holder = new THREE.Group();
+    holder.add(glbHull);
+    // Orient model so its long axis runs along +Z (tank forward) and seat it on
+    // the chassis, then scale uniformly to the build's hull length.
+    const box0 = new THREE.Box3().setFromObject(glbHull);
+    const size0 = box0.getSize(new THREE.Vector3());
+    // longest horizontal extent = the hull length direction
+    if (size0.x > size0.z) glbHull.rotation.y = Math.PI / 2; // X-long -> rotate to Z-long
+    const box1 = new THREE.Box3().setFromObject(glbHull);
+    const size1 = box1.getSize(new THREE.Vector3());
+    const lenAxis = Math.max(size1.z, size1.x) || 1;
+    const k = (b.hullL * 1.02) / lenAxis;
+    glbHull.scale.multiplyScalar(k);
+    const box2 = new THREE.Box3().setFromObject(glbHull);
+    glbHull.position.y -= box2.min.y;              // base to y=0
+    glbHull.position.x -= (box2.max.x + box2.min.x) / 2 * k; // re-center X
+    holder.position.y = 0.9; // seat above the hover skirt, roughly hull base
+    holder.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    holder.name = "glbHull";
+    root.add(holder);
+    hull.visible = false; // hide procedural silhouette under the model body
+  }
 
   // glowing circular drive intakes on each flank (the NSDF hover-tech tell)
   for (const side of [-1, 1]) {
