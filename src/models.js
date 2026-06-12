@@ -19,7 +19,7 @@ let _loaded = false;
 // The GLBs we actually wire. Keep this list in sync with what terrain.js /
 // tank.js request; only these files are shipped under assets/models/.
 const MODELS = {
-  vehicle: "assets/models/vehicle_quaternius.glb",
+  vehicle: "assets/models/tank_static.glb",
   rock_01: "assets/models/rock_01.glb",
   rock_02: "assets/models/rock_02.glb",
   boulder_01: "assets/models/boulder_01.glb",

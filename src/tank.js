@@ -369,7 +369,19 @@ export function buildTankMesh(b, team, skin = null) {
     glbHull.position.y -= box2.min.y;              // base to y=0
     glbHull.position.x -= (box2.max.x + box2.min.x) / 2 * k; // re-center X
     holder.position.y = 0.9; // seat above the hover skirt, roughly hull base
-    holder.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    holder.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true; o.receiveShadow = true;
+        // tint the model hull to the team / skin colour so versus sides read
+        if (body && o.material) {
+          o.material = o.material.clone();
+          o.material.color.copy(body.color);
+          if (body.map) o.material.map = body.map;
+          o.material.metalness = 0.55; o.material.roughness = 0.5;
+          o.material.needsUpdate = true;
+        }
+      }
+    });
     holder.name = "glbHull";
     root.add(holder);
     hull.visible = false; // hide procedural silhouette under the model body
