@@ -19,6 +19,10 @@ const browser = await chromium.launch({
   args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
 });
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+// SwiftShader rasterizes the whole frame on the CPU, and a scene full of
+// craft pushes a single capture past Playwright's 30s default. Not a signal
+// about the real build; a real GPU renders these in well under a second.
+page.setDefaultTimeout(180_000);
 
 const errors = [];
 page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));

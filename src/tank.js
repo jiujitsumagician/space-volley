@@ -11,7 +11,10 @@
 import * as THREE from "three";
 import { clamp, lerp, angleDelta } from "./util.js";
 import { WORLD_SIZE } from "./maps.js";
-import { getModel } from "./models.js";
+import {
+  craftMaterials, buildHull, buildEngine, buildDrive,
+  turretFurniture, buildGunTube, mergeInto,
+} from "./craftart.js";
 
 // hard playable boundary — sits just inside the rim wall's base. With the
 // new climb-through traction a tank could otherwise crest the rim ramp and
@@ -175,9 +178,6 @@ export class Tank {
     this.mgCooldown = Math.max(0, this.mgCooldown - dt);
     this.mgHeat = Math.max(0, this.mgHeat - dt * 0.55);
 
-    // wheels spin with ground speed
-    for (const w of this.wheels) w.rotation.x += (this.speed / 0.95) * dt;
-
     this.poseMesh(world, dt);
   }
 
@@ -205,6 +205,29 @@ export class Tank {
       .applyQuaternion(this.root.quaternion);
     const hullPitch = Math.asin(clamp(_fwd.y, -1, 1));
     this.barrel.rotation.x = -clamp(this.barrelPitch - hullPitch, -0.5, 1.35);
+
+    this.animateRunningGear(dt);
+  }
+
+  /**
+   * Spool the intake turbines and scroll the lift emitters with ground speed.
+   * Purely cosmetic — no gameplay state is read or written. This lives in
+   * poseMesh rather than update() on purpose: the online guest only ever
+   * calls poseMesh, so running it from update() left guest craft skating
+   * along on dead, unlit drives.
+   */
+  animateRunningGear(dt) {
+    const spin = (this.speed / 0.95) * dt;
+    // each spinner records the axis its disc actually turns about — nozzle
+    // fans face aft (Z), flank hardware faces outboard (X)
+    for (const w of this.wheels) w.rotation[w.userData.spinAxis ?? "x"] += spin;
+    const maps = this.root.userData.driveMaps;
+    if (maps) {
+      // emitter bands run along the hull, so sliding U walks the energy
+      // aft at the rate the craft is actually travelling
+      const slide = this.speed * dt * 0.42;
+      for (const t of maps) t.offset.x -= slide;
+    }
   }
 
   canFire() {
@@ -249,216 +272,44 @@ function approach(v, target, step) {
   return v;
 }
 
-// ── paint shop: generated camo textures, cached per skin ───────
-const _camoCache = new Map();
-function camoTexture(skin) {
-  if (_camoCache.has(skin.id)) return _camoCache.get(skin.id);
-  const c = document.createElement("canvas");
-  c.width = c.height = 256;
-  const ctx = c.getContext("2d");
-  const hex = (n) => `#${n.toString(16).padStart(6, "0")}`;
-  ctx.fillStyle = hex(skin.colors[0]);
-  ctx.fillRect(0, 0, 256, 256);
-  if (skin.stripes) {
-    // tiger: wavy diagonal slashes
-    for (let i = 0; i < 26; i++) {
-      ctx.strokeStyle = hex(skin.colors[i % 2 === 0 ? 1 : 2]);
-      ctx.lineWidth = 6 + Math.random() * 12;
-      ctx.beginPath();
-      const y = Math.random() * 256;
-      ctx.moveTo(-20, y);
-      ctx.bezierCurveTo(80, y + (Math.random() - 0.5) * 90, 180, y + (Math.random() - 0.5) * 90, 286, y + (Math.random() - 0.5) * 60);
-      ctx.stroke();
-    }
-  } else {
-    // classic blotch camo
-    for (let i = 0; i < 46; i++) {
-      ctx.fillStyle = hex(skin.colors[1 + (i % (skin.colors.length - 1))]);
-      ctx.beginPath();
-      ctx.ellipse(
-        Math.random() * 256, Math.random() * 256,
-        14 + Math.random() * 30, 9 + Math.random() * 20,
-        Math.random() * Math.PI, 0, Math.PI * 2
-      );
-      ctx.fill();
-    }
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(0.12, 0.12);
-  _camoCache.set(skin.id, tex);
-  return tex;
-}
-
-// ── mesh construction (exported for menu thumbnails) ───────────
+// ── mesh construction (exported for menu thumbnails + title screen) ────
+/**
+ * Assemble one craft. The RIG is frozen: the `turret` / `barrel` / `muzzle` /
+ * `mgMuzzle` groups keep the exact offsets they have always had, because
+ * weapons.js spawns shells from muzzleWorld() — moving them would be a
+ * mechanics change wearing a paint job. Everything else here is cosmetic.
+ *
+ * Materials and geometry are built fresh per craft (thumbs.js disposes both
+ * after snapshotting); only the generated textures inside craftart are shared.
+ */
 export function buildTankMesh(b, team, skin = null) {
   const root = new THREE.Group();
   root.userData.wheels = [];
-  let body;
-  // SPACE VOLLEY armour reads as fielded sci-fi hardware: more metallic
-  // panels, darker cooler structure, and bright energy trim/thrusters.
-  if (skin && skin.kind === "solid") {
-    body = new THREE.MeshStandardMaterial({ color: skin.color, roughness: 0.46, metalness: 0.62 });
-  } else if (skin && skin.kind === "camo") {
-    body = new THREE.MeshStandardMaterial({
-      color: 0xffffff, map: camoTexture(skin), roughness: 0.58, metalness: 0.42,
-    });
-  } else {
-    body = new THREE.MeshStandardMaterial({ color: team.body, roughness: 0.46, metalness: 0.62 });
-  }
-  const dark = new THREE.MeshStandardMaterial({ color: 0x161a22, roughness: 0.7, metalness: 0.55 });
-  const accent = new THREE.MeshStandardMaterial({
-    color: team.accent, roughness: 0.35, metalness: 0.2,
-    emissive: team.accent, emissiveIntensity: 0.95,
-  });
-  // bright energy material for thrusters + ground-effect glow (anti-grav read)
-  const glow = new THREE.MeshStandardMaterial({
-    color: team.accent, roughness: 0.3, metalness: 0.0,
-    emissive: team.accent, emissiveIntensity: 2.4,
-  });
 
-  // hull — beveled box silhouette via extruded shape
-  const hullH = b.hullH, hw = b.hullW / 2, hl = b.hullL / 2;
-  // Sleeker hover-hull silhouette: a long raked front glacis down to a pointed
-  // prow chin, a set-back top deck, and a clipped rear — reads far more like
-  // an NSDF assault sled than a boxy tank. (Collision is a fixed radius, not
-  // this mesh, so reshaping is purely cosmetic.)
-  const shape = new THREE.Shape();
-  shape.moveTo(-hl * 0.84, 0);
-  shape.lineTo(-hl, hullH * 0.5);
-  shape.lineTo(-hl * 0.58, hullH);
-  shape.lineTo(hl * 0.34, hullH);
-  shape.lineTo(hl * 0.9, hullH * 0.46);
-  shape.lineTo(hl, hullH * 0.1);
-  shape.lineTo(hl * 0.84, 0);
-  shape.closePath();
-  const hullGeo = new THREE.ExtrudeGeometry(shape, { depth: b.hullW, bevelEnabled: false });
-  hullGeo.rotateY(Math.PI / 2);
-  hullGeo.translate(-hw + b.hullW, 1.5, 0);
-  // ExtrudeGeometry extrudes along +Z then we rotated — recenter X:
-  hullGeo.computeBoundingBox();
-  const bb = hullGeo.boundingBox;
-  hullGeo.translate(-(bb.max.x + bb.min.x) / 2, 0, -(bb.max.z + bb.min.z) / 2);
-  const hull = new THREE.Mesh(hullGeo, body);
-  hull.castShadow = true;
-  root.add(hull);
+  const mats = craftMaterials(team, skin);
+  const hullH = b.hullH;
 
-  // ── GLB vehicle hull (cosmetic) ──────────────────────────────
-  // Drop a CC0 low-poly tank body in as the visible chassis, fitted to this
-  // build's hull box. The procedural turret/barrel/muzzle/MG rig below is kept
-  // intact and rides on top, so aiming + firing are byte-for-byte unchanged
-  // (the empties the weapon code reads are still the procedural ones). If the
-  // model isn't cached we keep the procedural extruded hull. Static-hull path
-  // per spec — no reliance on rigging the model's own turret/gun.
-  const glbHull = getModel("vehicle");
-  if (glbHull) {
-    const holder = new THREE.Group();
-    holder.add(glbHull);
-    // Orient model so its long axis runs along +Z (tank forward) and seat it on
-    // the chassis, then scale uniformly to the build's hull length.
-    const box0 = new THREE.Box3().setFromObject(glbHull);
-    const size0 = box0.getSize(new THREE.Vector3());
-    // longest horizontal extent = the hull length direction
-    if (size0.x > size0.z) glbHull.rotation.y = Math.PI / 2; // X-long -> rotate to Z-long
-    const box1 = new THREE.Box3().setFromObject(glbHull);
-    const size1 = box1.getSize(new THREE.Vector3());
-    const lenAxis = Math.max(size1.z, size1.x) || 1;
-    const k = (b.hullL * 1.02) / lenAxis;
-    glbHull.scale.multiplyScalar(k);
-    const box2 = new THREE.Box3().setFromObject(glbHull);
-    glbHull.position.y -= box2.min.y;              // base to y=0
-    glbHull.position.x -= (box2.max.x + box2.min.x) / 2 * k; // re-center X
-    holder.position.y = 0.9; // seat above the hover skirt, roughly hull base
-    holder.traverse((o) => {
-      if (o.isMesh) {
-        o.castShadow = true; o.receiveShadow = true;
-        // tint the model hull to the team / skin colour so versus sides read
-        if (body && o.material) {
-          o.material = o.material.clone();
-          o.material.color.copy(body.color);
-          if (body.map) o.material.map = body.map;
-          o.material.metalness = 0.55; o.material.roughness = 0.5;
-          o.material.needsUpdate = true;
-        }
-      }
-    });
-    holder.name = "glbHull";
-    root.add(holder);
-    hull.visible = false; // hide procedural silhouette under the model body
+  // ── airframe ─────────────────────────────────────────────────
+  // Static detail is accumulated into per-material buckets and merged once,
+  // so a craft that gained ~40 greebles did not gain ~40 draw calls.
+  const out = {
+    body: [], dark: [], accent: [], glow: [], glass: [],
+    group: root, wheels: root.userData.wheels,
+  };
+
+  buildHull(b, mats, out);
+  buildEngine(b, mats, out);
+  for (const side of [-1, 1]) buildDrive(b, mats, side, out);
+
+  for (const [geos, mat] of [
+    [out.body, mats.body], [out.dark, mats.dark],
+    [out.accent, mats.accent], [out.glow, mats.glow], [out.glass, mats.glass],
+  ]) {
+    const m = mergeInto(geos, mat);
+    if (m) root.add(m);
   }
 
-  // glowing circular drive intakes on each flank (the NSDF hover-tech tell)
-  for (const side of [-1, 1]) {
-    const r = hullH * 0.4;
-    const intake = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.3, 18), glow);
-    intake.rotation.z = Math.PI / 2; // disc faces sideways (+/-X)
-    intake.position.set(side * (hw + 0.04), 1.5 + hullH * 0.52, hl * 0.04);
-    root.add(intake);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(r + 0.12, 0.18, 8, 20), dark);
-    ring.rotation.y = Math.PI / 2;
-    ring.position.copy(intake.position);
-    ring.castShadow = true;
-    root.add(ring);
-  }
-  // glowing trim line along the raked prow
-  const prow = new THREE.Mesh(new THREE.BoxGeometry(b.hullW * 0.7, 0.1, 0.5), accent);
-  prow.position.set(0, 1.5 + hullH * 0.12, hl * 0.96);
-  root.add(prow);
-
-  // accent stripe down the hull
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(b.hullW * 0.16, 0.12, b.hullL * 0.86), accent);
-  stripe.position.y = 1.5 + hullH + 0.07;
-  root.add(stripe);
-
-  // ── sci-fi drive block: rear engine housing + glowing thruster cores ──
-  const engine = new THREE.Mesh(new THREE.BoxGeometry(b.hullW * 0.74, hullH * 0.62, 1.2), dark);
-  engine.position.set(0, 1.5 + hullH * 0.52, -hl * 0.84);
-  engine.castShadow = true;
-  root.add(engine);
-  const nozN = b.hullW > 8 ? 3 : 2;
-  for (let i = 0; i < nozN; i++) {
-    const t = nozN === 1 ? 0.5 : i / (nozN - 1);
-    const nzx = lerp(-b.hullW * 0.28, b.hullW * 0.28, t);
-    const housing = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.64, 0.85, 12), dark);
-    housing.rotation.x = Math.PI / 2;
-    housing.position.set(nzx, 1.5 + hullH * 0.5, -hl - 0.28);
-    root.add(housing);
-    const coreGeo = new THREE.CylinderGeometry(0.32, 0.44, 0.55, 12);
-    const core = new THREE.Mesh(coreGeo, glow);
-    core.rotation.x = Math.PI / 2;
-    core.position.set(nzx, 1.5 + hullH * 0.5, -hl - 0.52);
-    root.add(core);
-  }
-  // ── anti-grav undercarriage (all Space Volley chassis are hover-tech) ──
-  // A dark plenum skirt with a bright glowing lift strip slung beneath the
-  // hull, plus side lift pods with downward thrust glow. No wheels/tracks —
-  // these are the terrestrial tell. Physics never reads the hover flag, so
-  // this is purely cosmetic; movement is identical to before.
-  const skirt = new THREE.Mesh(new THREE.BoxGeometry(b.hullW + 1.4, 1.1, b.hullL * 0.96), dark);
-  skirt.position.y = 1.0;
-  skirt.castShadow = true;
-  root.add(skirt);
-  const lift = new THREE.Mesh(new THREE.BoxGeometry(b.hullW + 0.8, 0.3, b.hullL * 0.9), glow);
-  lift.position.y = 0.5;
-  root.add(lift);
-  for (const side of [-1, 1]) {
-    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.05, 1.5, 10), dark);
-    pod.position.set(side * (hw + 0.5), 1.0, -b.hullL * 0.3);
-    pod.castShadow = true;
-    root.add(pod);
-    const podGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.18, 10), glow);
-    podGlow.position.set(side * (hw + 0.5), 0.28, -b.hullL * 0.3);
-    root.add(podGlow);
-    // armoured side plate on heavy/plated builds — keeps chassis variety
-    if (b.plated) {
-      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, b.hullL * 0.9), body);
-      plate.position.set(side * (hw + 0.95), 2.1, 0);
-      plate.castShadow = true;
-      root.add(plate);
-    }
-  }
-
-  // turret
+  // ── turret ───────────────────────────────────────────────────
   const turret = new THREE.Group();
   turret.name = "turret";
   turret.position.set(0, 1.5 + hullH + 0.2, b.longGun ? -0.8 : 0.2);
@@ -468,72 +319,69 @@ export function buildTankMesh(b, team, skin = null) {
     ? new THREE.BoxGeometry(b.turretR * 2.1, 1.9, b.turretR * 2.4)
     : b.angular
       ? new THREE.CylinderGeometry(b.turretR * 0.78, b.turretR * 1.18, 1.7, 6)
-      : new THREE.SphereGeometry(b.turretR, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2);
-  const dome = new THREE.Mesh(domeGeo, body);
+      : new THREE.SphereGeometry(b.turretR, 22, 14, 0, Math.PI * 2, 0, Math.PI / 2);
+  const dome = new THREE.Mesh(domeGeo, mats.bodyFine);
   if (b.angular || b.boxTurret) dome.position.y = 0.92;
   dome.castShadow = true;
+  dome.receiveShadow = true;
   turret.add(dome);
 
   if (b.plated) {
-    const mantlet = new THREE.Mesh(new THREE.BoxGeometry(b.turretR * 1.8, 1.4, 1.2), dark);
+    const mantlet = new THREE.Mesh(new THREE.BoxGeometry(b.turretR * 1.8, 1.4, 1.2), mats.dark);
     mantlet.position.set(0, 0.8, b.turretR * 0.8);
     turret.add(mantlet);
   }
 
-  // barrel pivot
+  turretFurniture(b, mats, turret);
+
+  // ── gun ──────────────────────────────────────────────────────
   const barrel = new THREE.Group();
   barrel.name = "barrel";
   barrel.position.set(0, b.angular ? 1.1 : b.turretR * 0.5, 0);
   turret.add(barrel);
 
   const tubeOffsets = b.twin ? [-b.barrelR * 2.4, b.barrelR * 2.4] : [0];
-  for (const ox of tubeOffsets) {
-    const tube = new THREE.Mesh(
-      new THREE.CylinderGeometry(b.barrelR, b.barrelR * 1.25, b.barrelL, 12),
-      dark
-    );
-    tube.rotation.x = Math.PI / 2;
-    tube.position.set(ox, 0, b.barrelL / 2 + b.turretR * 0.4);
-    tube.castShadow = true;
-    barrel.add(tube);
-
-    // muzzle brake
-    const brake = new THREE.Mesh(new THREE.CylinderGeometry(b.barrelR * 1.7, b.barrelR * 1.7, 0.9, 10), dark);
-    brake.rotation.x = Math.PI / 2;
-    brake.position.set(ox, 0, b.barrelL + b.turretR * 0.4 - 0.5);
-    barrel.add(brake);
-  }
+  for (const ox of tubeOffsets) buildGunTube(b, mats, barrel, ox, out);
 
   const muzzle = new THREE.Object3D();
   muzzle.name = "muzzle";
   muzzle.position.z = b.barrelL + b.turretR * 0.4 + 0.4;
   barrel.add(muzzle);
 
-  // mounted machine gun on the turret roof
+  // ── pintle autocannon on the turret roof ─────────────────────
   const mg = new THREE.Group();
   mg.position.set(b.turretR * 0.55, b.angular ? 1.8 : b.turretR * 0.95, -0.2);
-  const mgBody = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 2.1), dark);
-  mgBody.position.z = 0.6;
-  mg.add(mgBody);
-  const mgBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.6, 8), dark);
-  mgBarrel.rotation.x = Math.PI / 2;
-  mgBarrel.position.z = 2.2;
-  mg.add(mgBarrel);
+  const mgParts = [];
+  mgParts.push(new THREE.BoxGeometry(0.4, 0.44, 2.1).translate(0, 0, 0.6));
+  mgParts.push(new THREE.BoxGeometry(0.5, 0.5, 0.5).translate(0, 0.02, -0.25));
+  mgParts.push(new THREE.BoxGeometry(0.52, 0.42, 0.7).translate(-0.42, -0.16, 0.1));
+  mgParts.push(new THREE.CylinderGeometry(0.11, 0.13, 0.5, 8).translate(0, -0.42, 0.1));
+  const mgBarrel = new THREE.CylinderGeometry(0.085, 0.095, 1.6, 8);
+  mgBarrel.rotateX(Math.PI / 2);
+  mgBarrel.translate(0, 0, 2.2);
+  mgParts.push(mgBarrel);
+  const jacket = new THREE.CylinderGeometry(0.15, 0.15, 0.8, 8);
+  jacket.rotateX(Math.PI / 2);
+  jacket.translate(0, 0, 1.85);
+  mgParts.push(jacket);
+  const mgMesh = mergeInto(mgParts, mats.gun);
+  if (mgMesh) mg.add(mgMesh);
+
   const mgMuzzle = new THREE.Object3D();
   mgMuzzle.name = "mgMuzzle";
   mgMuzzle.position.z = 3.0;
   mg.add(mgMuzzle);
   turret.add(mg);
 
-  // antenna + headlights for character
-  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 3.4, 4), dark);
-  antenna.position.set(-b.turretR * 0.7, 1.8, -b.turretR * 0.5);
-  turret.add(antenna);
-  for (const side of [-1, 1]) {
-    const light = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.4, 0.2), accent);
-    light.position.set(side * hw * 0.6, 1.5 + hullH * 0.55, hl * 0.98);
-    root.add(light);
-  }
+  // scrolling lift-emitter map, driven from Tank.animateRunningGear()
+  root.userData.driveMaps = [mats.emitter.emissiveMap].filter(Boolean);
+
+  // The sun's shadow box is now fitted tightly to the action; craft only
+  // benefit from it if they also RECEIVE. Every part cast before, none
+  // received.
+  root.traverse((o) => {
+    if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+  });
 
   return root;
 }

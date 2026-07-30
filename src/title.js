@@ -11,10 +11,10 @@
 
 import * as THREE from "three";
 import { PMREMGenerator } from "three";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { buildWorld } from "./terrain.js";
+import { buildWorld, makeSkyDome, skyEnvIntensity } from "./terrain.js";
 import { mapById } from "./maps.js";
 import { buildTankMesh } from "./tank.js";
+import { disposeMaterial } from "./craftart.js";
 import { TEAM_COLORS, chassisById } from "./tanks.js";
 import { Effects } from "./effects.js";
 import { GRAVITY } from "./weapons.js";
@@ -32,11 +32,17 @@ export class TitleScene {
     const map = mapById("dunes");
     this.map = map;
 
-    // image-based lighting for believable armor
+    // image-based lighting baked from this map's own sky, so the plating on
+    // the menu reflects the same orbit the match will start in
     const pmrem = new PMREMGenerator(renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.5;
+    const skyScene = new THREE.Scene();
+    const dome = makeSkyDome(map);
+    skyScene.add(dome);
+    this.scene.environment = pmrem.fromScene(skyScene, 0, 1, 5000).texture;
+    this.scene.environmentIntensity = skyEnvIntensity(map);
     pmrem.dispose();
+    dome.geometry.dispose();
+    dome.material.dispose();
 
     this.scene.fog = new THREE.Fog(map.fog.color, map.fog.near, map.fog.far);
     const hemi = new THREE.HemisphereLight(map.hemi.sky, map.hemi.ground, map.hemi.intensity);
@@ -50,7 +56,7 @@ export class TitleScene {
     sun.shadow.bias = -0.0004;
     this.scene.add(sun, sun.target);
 
-    const built = buildWorld(map);
+    const built = buildWorld(map, renderer);
     this.world = built;
     this.scene.add(built.group);
 
@@ -107,6 +113,7 @@ export class TitleScene {
   }
 
   update(dt) {
+    this.world.tickVisuals?.(dt);
     this.t += dt;
 
     // ── cinematic camera: slow orbit, looking just above the duel so
@@ -188,10 +195,7 @@ export class TitleScene {
     this.scene.traverse((o) => {
       if (o.geometry) o.geometry.dispose?.();
       if (o.material) {
-        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
-          m.map?.dispose?.();
-          m.dispose?.();
-        });
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach(disposeMaterial);
       }
     });
     this.scene.environment?.dispose?.();
