@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { Game } from "./game.js";
 import { Menu } from "./menu.js";
 import { TitleScene } from "./title.js";
+import { PodiumScene } from "./podium.js";
 import { audio } from "./audio.js";
 import { GamepadManager } from "./gamepad.js";
 import { preloadModels } from "./models.js";
@@ -23,6 +24,7 @@ document.getElementById("app").appendChild(renderer.domElement);
 window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   title?.resize(window.innerWidth, window.innerHeight);
+  podium?.resize(window.innerWidth, window.innerHeight);
 });
 
 audio.init?.();
@@ -52,6 +54,7 @@ document.body.appendChild(padPip);
 // ── state machine ────────────────────────────────────────────
 let game = null;
 let title = null;
+let podium = null;
 const menuEl = document.getElementById("menu");
 const endEl = document.getElementById("endscreen");
 const fade = document.getElementById("fade");
@@ -60,6 +63,8 @@ const menu = new Menu(menuEl, launchMatch, gamepads);
 // Test hook (mirrors window.__IV for the game) so the menu harness can drive
 // focus navigation deterministically without faking frame-timed pad edges.
 if (typeof window !== "undefined") window.__MENU = menu;
+// Test hook: lets the podium check render the victory screen directly.
+if (typeof window !== "undefined") window.__END = (r, c) => showEndScreen(r, c ?? { mapId: "dunes", mode: "solo", players: [], botCount: 0 });
 
 function launchMatch(config) {
   audio.musicStart?.("battle"); // crossfade menu → battle soundtrack
@@ -77,9 +82,22 @@ function showEndScreen(result, config) {
   game?.dispose();
   game = null;
   audio.musicStart?.("menu"); // crossfade battle → menu soundtrack on the end screen
+
+  // Victory podium behind the panel: the top three craft on a 1-2-3
+  // podium, champion popping champagne with a companion on its arm.
+  podium?.dispose();
+  podium = null;
+  try {
+    podium = new PodiumScene(renderer, result.standings ?? []);
+    podium.resize(window.innerWidth, window.innerHeight);
+  } catch (e) { console.warn("podium:", e); podium = null; }
+  if (typeof window !== "undefined") window.__PODIUM = podium; // test hook
+
+  // Panel floats near the top and goes translucent so the podium shows.
   endEl.style.display = "flex";
+  endEl.style.alignItems = "flex-start";
   endEl.innerHTML = `
-    <div class="panel">
+    <div class="panel" style="margin-top:3vh; background:rgba(9,13,20,.72); backdrop-filter:blur(4px);">
       <div class="endtitle">${result.winnerIsPlayer ? "VICTORY" : "DEFEAT"}</div>
       <div class="endsub">${result.winner} takes the field</div>
       <table class="scores">
@@ -95,10 +113,16 @@ function showEndScreen(result, config) {
       </div>
     </div>
   `;
-  endEl.querySelector("[data-again]").onclick = () => { audio.uiSelect?.({}); launchMatch(config); };
+  const closeEnd = () => {
+    endEl.style.display = "none";
+    endEl.style.alignItems = "";
+    podium?.dispose();
+    podium = null;
+  };
+  endEl.querySelector("[data-again]").onclick = () => { audio.uiSelect?.({}); closeEnd(); launchMatch(config); };
   endEl.querySelector("[data-menu]").onclick = () => {
     audio.uiSelect?.({});
-    endEl.style.display = "none";
+    closeEnd();
     menu.show();
   };
 }
@@ -167,11 +191,16 @@ function frame(now) {
   const menuVisible = menuEl.style.display !== "none" && menuEl.style.display !== "";
   padPip.style.display = (menuVisible && gamepads.anyPadConnected()) ? "block" : "none";
 
+  const endVisible = endEl.style.display === "flex";
   if (game && !paused) {
     // __TEST_MANUAL lets the headless playtest step the simulation
     // deterministically (decoupled from SwiftShader frame rate)
     if (!window.__TEST_MANUAL) game.update(dt);
     game.render(dt);
+  } else if (!game && endVisible && podium) {
+    // victory podium behind the end screen
+    podium.update(dt);
+    podium.render();
   } else if (!game && menuVisible) {
     // live battle diorama behind the menu
     try {
