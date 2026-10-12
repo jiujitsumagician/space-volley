@@ -27,7 +27,7 @@ import { Hud, SharedHud } from "./hud.js";
 import { Input, P1_KEYS, P2_KEYS } from "./input.js";
 import { TouchControls, isTouchDevice } from "./touch.js";
 import { audio } from "./audio.js";
-import { clamp, lerp, rand, pick, angleDelta } from "./util.js";
+import { clamp, lerp, rand, pick, angleDelta, sanitizeName } from "./util.js";
 
 /** Shortest-path angular step toward a target (returns the delta). */
 function angleLerp(current, target, k) {
@@ -251,7 +251,7 @@ export class Game {
       const tank = new Tank({
         chassis: chassisById(g.chassisId),
         team: TEAM_COLORS[teamIdx++ % TEAM_COLORS.length],
-        name: g.name ?? "CHALLENGER",
+        name: sanitizeName(g.name),
         faction: "p-remote",
         skin: g.skinId ? skinById(g.skinId) : null,
       });
@@ -462,12 +462,13 @@ export class Game {
     this._inputAcc = 0;
 
     s.on("roster", (r) => {
+      if (!Array.isArray(r?.tanks)) return;
       this.killTarget = r.killTarget;
       r.tanks.forEach((info, i) => {
         const tank = new Tank({
           chassis: chassisById(info.chassisId),
           team: TEAM_COLORS.find((t) => t.id === info.teamId) ?? TEAM_COLORS[i % TEAM_COLORS.length],
-          name: info.name,
+          name: String(info?.name ?? "").slice(0, 24),
           skin: info.skinId ? skinById(info.skinId) : null,
         });
         tank.netTarget = { x: 0, z: 0, yaw: 0, turretYaw: 0, barrelPitch: 0.18 };
@@ -483,12 +484,13 @@ export class Game {
     });
     s.on("snap", (snap) => this.applySnapshot(snap));
     s.on("feed", (f) => {
-      this.sharedHud.addKill(f.killer, f.weapon, f.victim);
+      this.sharedHud.addKill(String(f?.killer ?? "").slice(0, 24), String(f?.weapon ?? "").slice(0, 24), String(f?.victim ?? "").slice(0, 24));
       if (f.score) this.sharedHud.setScore(f.score);
       audio.explosion(0.4, {});
     });
     s.on("end", (result) => {
       if (this.over) return;
+      if (!result || !Array.isArray(result.standings)) return;
       this.over = true;
       this._finishTimer = setTimeout(() => {
         if (!this.disposed) this.onMatchEnd(result);
@@ -508,6 +510,7 @@ export class Game {
   }
 
   applySnapshot(snap) {
+    if (!Array.isArray(snap?.t) || !Array.isArray(snap?.s)) return;
     this._lastSnap = snap;
     const tanks = this.world.tanks;
     snap.t.forEach((row, i) => {

@@ -7,6 +7,7 @@ import { Menu } from "./menu.js";
 import { TitleScene } from "./title.js";
 import { PodiumScene } from "./podium.js";
 import { audio } from "./audio.js";
+import { escapeHtml } from "./util.js";
 import { GamepadManager } from "./gamepad.js";
 import { preloadModels } from "./models.js";
 
@@ -104,12 +105,12 @@ function showEndScreen(result, config) {
   endEl.innerHTML = `
     <div class="panel" style="margin-top:3vh; background:rgba(9,13,20,.72); backdrop-filter:blur(4px);">
       <div class="endtitle">${result.winnerIsPlayer ? "VICTORY" : "DEFEAT"}</div>
-      <div class="endsub">${result.winner} takes the field</div>
+      <div class="endsub">${escapeHtml(result.winner)} takes the field</div>
       <table class="scores">
         <tr><th>Commander</th><th>Tank</th><th>Kills</th><th>Deaths</th></tr>
         ${result.standings.map((s) => `
           <tr class="${s.isPlayer ? "me" : ""}">
-            <td>${s.name}</td><td>${s.chassis}</td><td>${s.kills}</td><td>${s.deaths}</td>
+            <td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.chassis)}</td><td>${escapeHtml(s.kills)}</td><td>${escapeHtml(s.deaths)}</td>
           </tr>`).join("")}
       </table>
       <div class="row-actions">

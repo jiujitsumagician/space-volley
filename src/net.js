@@ -18,7 +18,14 @@ const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I/L
 
 export function makeRoomCode() {
   let s = "";
-  for (let i = 0; i < 5; i++) s += CODE_ALPHABET[(Math.random() * CODE_ALPHABET.length) | 0];
+  const cryptoObj = globalThis.crypto;
+  if (cryptoObj?.getRandomValues) {
+    const buf = new Uint32Array(5);
+    cryptoObj.getRandomValues(buf);
+    for (let i = 0; i < 5; i++) s += CODE_ALPHABET[buf[i] % CODE_ALPHABET.length];
+  } else {
+    for (let i = 0; i < 5; i++) s += CODE_ALPHABET[(Math.random() * CODE_ALPHABET.length) | 0];
+  }
   return s;
 }
 
@@ -45,8 +52,10 @@ export class NetSession {
   _wire(conn) {
     this.conn = conn;
     conn.on("data", (msg) => {
-      const cb = this.handlers.get(msg?.y);
-      if (cb) cb(msg.d);
+      if (!msg || typeof msg !== "object" || typeof msg.y !== "string") return;
+      const cb = this.handlers.get(msg.y);
+      if (!cb) return;
+      try { cb(msg.d); } catch { /* drop malformed peer message */ }
     });
     conn.on("close", () => {
       this.connected = false;
@@ -78,8 +87,15 @@ export class NetSession {
         }
       });
       peer.on("connection", (conn) => {
-        if (this.conn?.open) { conn.close(); return; } // one guest only
+        if (this._guestClaimed || this.conn?.open) { conn.close(); return; } // one guest only
+        this._guestClaimed = true; // reserve the slot before "open" so simultaneous connectors can't both pass
+        this._guestConn = conn;
+        const release = () => { if (this._guestConn === conn) this._guestClaimed = false; };
+        conn.on("close", release);
+        conn.on("error", release);
+        const stale = setTimeout(() => { if (!conn.open) release(); }, 20000); // aborted attempt must not lock the room
         conn.on("open", () => {
+          clearTimeout(stale);
           this.connected = true;
           this._wire(conn);
           onGuestConnected?.();

@@ -6,7 +6,8 @@
  * launch config. DOM-driven, keyboard + mouse both work.
  */
 
-import { CHASSIS, SKINS } from "./tanks.js";
+import { CHASSIS, SKINS, chassisById, skinById } from "./tanks.js";
+import { escapeHtml, sanitizeName } from "./util.js";
 import { NetSession } from "./net.js";
 import { MAPS } from "./maps.js";
 import { audio } from "./audio.js";
@@ -302,7 +303,13 @@ export class Menu {
     this.netHelloShown = false;
     this.netSession = new NetSession();
     this.netSession.on("hello", (d) => {
-      this.netGuestHello = d;
+      // The hello comes from an untrusted peer: keep only validated plain values.
+      const hello = {
+        name: sanitizeName(d?.name),
+        chassisId: chassisById(typeof d?.chassisId === "string" ? d.chassisId : "").id,
+        skinId: d?.skinId && typeof d.skinId === "string" ? skinById(d.skinId).id : null,
+      };
+      this.netGuestHello = hello;
       // Always ack so the guest stops resending its loadout, even on the
       // duplicates that arrive before the first ack lands.
       this.netSession?.send("helloack", {});
@@ -312,7 +319,7 @@ export class Menu {
       if (!loberr || !goBtn) return;
       this.netHelloShown = true;
       loberr.innerHTML =
-        `<b style="color:#6dff8a;">${d.name ?? "CHALLENGER"} READY</b> — ${d.chassisId.toUpperCase()}`;
+        `<b style="color:#6dff8a;">${escapeHtml(hello.name)} READY</b> — ${escapeHtml(hello.chassisId.toUpperCase())}`;
       goBtn.style.display = "";
       this.refreshFocusables();
       audio.pickup?.({});
@@ -371,6 +378,7 @@ export class Menu {
     this.netSession.on("helloack", () => stopHello());
     this.netSession.on("config", (cfg) => {
       stopHello();
+      if (!cfg || typeof cfg !== "object") return;
       const session = this.netSession;
       this.netSession = null; // game owns it now
       this.hide();
@@ -379,7 +387,7 @@ export class Menu {
         mode: "online",
         players: [{ chassisId: p.chassisId, skinId: p.skinId, name: "CHALLENGER" }],
         botCount: 0,
-        killTarget: cfg.killTarget,
+        killTarget: Number.isFinite(cfg.killTarget) ? cfg.killTarget : 10,
         net: { role: "guest", session },
       });
     });
@@ -426,7 +434,10 @@ export class Menu {
   // ── options: gamepad layout + audio ─────────────────────────
   options() {
     const gm = this.gamepads;
-    const vols = JSON.parse(localStorage.getItem("iv.audio") ?? '{"master":80,"music":35}');
+    // localStorage is shared with sibling sites on this origin: tolerate bad values
+    let vols;
+    try { vols = JSON.parse(localStorage.getItem("iv.audio") ?? "null"); } catch { vols = null; }
+    if (!vols || typeof vols.master !== "number" || typeof vols.music !== "number") vols = { master: 80, music: 35 };
     const bindRow = (action, label) => `
       <div class="choice" data-rebind="${action}" style="min-width:170px;">
         <div class="big">${label}</div>

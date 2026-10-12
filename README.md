@@ -19,7 +19,7 @@ command-terminal HUD. Iron Volley remains its own game; this is a separate one.
 
 ```bash
 npm install
-npm start          # → http://localhost:8137
+npm start          # → http://localhost:8137 (loopback only; HOST=0.0.0.0 npm start for LAN/phone testing)
 ```
 
 No build step. Three.js via import map, everything else is hand-rolled. Deploys

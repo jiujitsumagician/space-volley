@@ -66,3 +66,13 @@ export function makeFbm(seed, octaves = 4, lacunarity = 2, gain = 0.5) {
     return sum / norm; // -1..1
   };
 }
+
+/** Escape a value for safe interpolation into an innerHTML template. */
+export const escapeHtml = (v) =>
+  String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/** Coerce an untrusted (network) display name to a short plain string. */
+export function sanitizeName(v, fallback = "CHALLENGER") {
+  const s = typeof v === "string" ? v.replace(/[^A-Za-z0-9 _\-]/g, "").trim().slice(0, 16) : "";
+  return s || fallback;
+}
